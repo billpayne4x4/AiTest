@@ -141,7 +141,7 @@ public class Hud
     }
 
     public void Draw(int w, int h, Simulation sim, Renderer renderer, bool editorEnabled, int selectedPoint,
-        bool aiMenu, int aiMenuRow, int hiddenLayers, int hiddenNodes,
+        bool aiMenu, int aiMenuRow, int hiddenLayers, int hiddenNodes, AiModel_V1.TrainingConfig cfg,
         bool showBrain, bool brainFullscreen, bool showStatus, bool orbitPaused)
     {
         Begin2D(w, h);
@@ -175,9 +175,12 @@ public class Hud
         DrawText(20, h - 98, "N/F/S  NORMAL/STEP/SUPERFAST", 1, 0.7f, 0.7f, 0.7f);
         DrawText(20, h - 84, "K NEW GENERATION OFF TRACK", 1, 0.7f, 0.7f, 0.7f);
         DrawText(20, h - 70, "SPACE  STEP (IN STEP MODE)", 1, 0.7f, 0.7f, 0.7f);
-        DrawText(20, h - 56, "R RETRAIN  T TRACK  M AI MENU", 1, 0.7f, 0.7f, 0.7f);
+        DrawText(20, h - 56, "R RETRAIN  T TRACK  M/C AI MENU", 1, 0.7f, 0.7f, 0.7f);
         DrawText(20, h - 42, "B BRAIN  V FULL BRAIN  H STATUS", 1, 0.7f, 0.7f, 0.7f);
         DrawText(20, h - 28, "ESC  QUIT", 1, 0.7f, 0.7f, 0.7f);
+        // Clickable button that opens the AI menu (see AiButtonHit).
+        DrawPanel(10, h - 186, 150, 24, 0.1f, 0.3f, 0.45f, 0.9f);
+        DrawText(24, h - 180, "[AI SETUP] (M)", 1, 1f, 1f, 1f);
         }
 
         // ---- AI brain panel (top-right) ----
@@ -195,26 +198,46 @@ public class Hud
         }
 
         if (aiMenu)
-            DrawAiMenu(w, h, aiMenuRow, hiddenLayers, hiddenNodes);
+            DrawAiMenu(w, h, aiMenuRow, hiddenLayers, hiddenNodes, cfg);
 
         End2D();
     }
 
-    private void DrawAiMenu(int w, int h, int selectedRow, int hiddenLayers, int hiddenNodes)
+    /// <summary>Hit-test for the clickable [AI SETUP] button (screen coords, origin top-left).</summary>
+    public static bool AiButtonHit(int w, int h, int mx, int my)
+        => mx >= 10 && mx <= 160 && my >= h - 186 && my <= h - 162;
+
+    private static string OnOff(bool b) => b ? "ON" : "OFF";
+    private static string ActName(int a) => a == 1 ? "RELU" : a == 2 ? "GELU" : "TANH";
+    private static string InitName(int i) => i == 1 ? "HE" : i == 2 ? "ORTHO" : "XAVIER";
+
+    private void DrawAiMenu(int w, int h, int selectedRow, int hiddenLayers, int hiddenNodes, AiModel_V1.TrainingConfig cfg)
     {
-        const int mw = 410, mh = 190;
+        const int mw = 460, mh = 400;
         int x = (w - mw) / 2, y = (h - mh) / 2;
         DrawPanel(x, y, mw, mh, 0.03f, 0.05f, 0.09f, 0.96f);
         DrawText(x + 24, y + 18, "AI NETWORK CONFIGURATION", 2, 0.35f, 0.9f, 1f);
 
-        float r0 = selectedRow == 0 ? 1f : 0.75f;
-        float g0 = selectedRow == 0 ? 0.8f : 0.75f;
-        float r1 = selectedRow == 1 ? 1f : 0.75f;
-        float g1 = selectedRow == 1 ? 0.8f : 0.75f;
-        DrawText(x + 35, y + 70, (selectedRow == 0 ? "> " : "  ") + "HIDDEN LAYERS: " + hiddenLayers, 2, r0, g0, 0.35f);
-        DrawText(x + 35, y + 100, (selectedRow == 1 ? "> " : "  ") + "NODES PER LAYER: " + hiddenNodes, 2, r1, g1, 0.35f);
-        DrawText(x + 24, y + 142, "UP/DOWN SELECT  LEFT/RIGHT CHANGE", 1, 0.7f, 0.8f, 0.9f);
-        DrawText(x + 24, y + 160, "ENTER APPLY AND RETRAIN  ESC CANCEL", 1, 0.7f, 0.8f, 0.9f);
+        string[] rows =
+        {
+            "HIDDEN LAYERS: " + hiddenLayers,
+            "NODES PER LAYER: " + hiddenNodes,
+            "RESIDUAL: " + OnOff(cfg.UseResidual),
+            "LAYER NORM: " + OnOff(cfg.UseLayerNorm),
+            "ACTIVATION: " + ActName(cfg.Activation),
+            "ADAM: " + OnOff(cfg.UseAdam),
+            "INIT: " + InitName(cfg.Init),
+            "GRAD CLIP: " + (cfg.GradClip <= 0f ? "OFF" : cfg.GradClip.ToString("F1")),
+            "PPO: " + OnOff(cfg.UsePpo),
+        };
+        for (int i = 0; i < rows.Length; i++)
+        {
+            bool sel = selectedRow == i;
+            DrawText(x + 35, y + 62 + i * 30, (sel ? "> " : "  ") + rows[i], 2,
+                sel ? 1f : 0.75f, sel ? 0.8f : 0.75f, 0.35f);
+        }
+        DrawText(x + 24, y + mh - 48, "UP/DOWN SELECT  LEFT/RIGHT CHANGE", 1, 0.7f, 0.8f, 0.9f);
+        DrawText(x + 24, y + mh - 30, "ENTER APPLY AND RETRAIN  ESC CANCEL", 1, 0.7f, 0.8f, 0.9f);
     }
 
     private void DrawBrain(int w, int h, Simulation sim, bool fullscreen)

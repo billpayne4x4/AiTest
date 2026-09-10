@@ -53,6 +53,7 @@ public static class Sdl
     public const int K_3 = 0x33;
     public const int K_A = 0x61;
     public const int K_B = 0x62;
+    public const int K_C = 0x63;
     public const int K_M = 0x6d;
     public const int K_F = 0x66;
     public const int K_H = 0x68;

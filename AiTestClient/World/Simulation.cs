@@ -105,8 +105,11 @@ public class Simulation
     }
 
     public void ReconfigureBrain(int hiddenLayerCount, int hiddenNodeCount)
+        => ReconfigureBrain(hiddenLayerCount, hiddenNodeCount, Brain.TrainConfig.Clone());
+
+    public void ReconfigureBrain(int hiddenLayerCount, int hiddenNodeCount, AiModel_V1.TrainingConfig config)
     {
-        Brain = new CarBrain(Brain.Rays, Environment.TickCount, hiddenLayerCount, hiddenNodeCount);
+        Brain = new CarBrain(Brain.Rays, Environment.TickCount, hiddenLayerCount, hiddenNodeCount, config);
         Inputs = Array.Empty<float>();
         RayDistances = Array.Empty<float>();
         NodeActivations = Array.Empty<float>();

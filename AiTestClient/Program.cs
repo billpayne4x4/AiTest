@@ -1,4 +1,4 @@
-﻿﻿using System;
+﻿using System;
 using System.Diagnostics;
 using AiTestClient.World;
 
@@ -46,8 +46,10 @@ internal static class Program
             int selectedPoint = -1;
             bool aiMenu = false;
             int aiMenuRow = 0;
+            const int AiMenuRows = 9;
             int hiddenLayers = 1;
             int hiddenNodes = 10;
+            var trainCfg = new AiModel_V1.TrainingConfig();
             bool showBrain = true;
             bool brainFullscreen = false;
             bool showStatus = true;
@@ -59,11 +61,18 @@ internal static class Program
             {
                 window.ProcessEvents();
 
-                if (window.KeyM)
+                if (window.KeyM || window.KeyC)
                 {
                     aiMenu = !aiMenu;
                     editor = false;
                     window.KeyM = false;
+                    window.KeyC = false;
+                }
+                // Clickable [AI SETUP] button (bottom-left, above controls panel).
+                if (window.MousePressed && !aiMenu && Hud.AiButtonHit(window.Width, window.Height, window.MouseX, window.MouseY))
+                {
+                    aiMenu = true;
+                    editor = false;
                 }
                 if (window.KeyB)
                 {
@@ -100,18 +109,29 @@ internal static class Program
                 }
                 if (aiMenu)
                 {
-                    if (window.KeyUp) { aiMenuRow = (aiMenuRow + 1) % 2; window.KeyUp = false; }
-                    if (window.KeyDown) { aiMenuRow = (aiMenuRow + 1) % 2; window.KeyDown = false; }
+                    if (window.KeyUp) { aiMenuRow = (aiMenuRow + AiMenuRows - 1) % AiMenuRows; window.KeyUp = false; }
+                    if (window.KeyDown) { aiMenuRow = (aiMenuRow + 1) % AiMenuRows; window.KeyDown = false; }
                     int delta = 0;
                     if (window.KeyLeft) { delta = -1; window.KeyLeft = false; }
                     if (window.KeyRight) { delta = 1; window.KeyRight = false; }
-                    if (aiMenuRow == 0 && delta != 0)
-                        hiddenLayers = delta > 0 ? checked(hiddenLayers + 1) : Math.Max(1, hiddenLayers - 1);
-                    else if (aiMenuRow == 1 && delta != 0)
-                        hiddenNodes = delta > 0 ? checked(hiddenNodes + 1) : Math.Max(1, hiddenNodes - 1);
+                    if (delta != 0)
+                    {
+                        switch (aiMenuRow)
+                        {
+                            case 0: hiddenLayers = delta > 0 ? checked(hiddenLayers + 1) : Math.Max(1, hiddenLayers - 1); break;
+                            case 1: hiddenNodes = delta > 0 ? checked(hiddenNodes + 1) : Math.Max(1, hiddenNodes - 1); break;
+                            case 2: trainCfg.UseResidual = !trainCfg.UseResidual; break;
+                            case 3: trainCfg.UseLayerNorm = !trainCfg.UseLayerNorm; break;
+                            case 4: trainCfg.Activation = (trainCfg.Activation + delta + 3) % 3; break;
+                            case 5: trainCfg.UseAdam = !trainCfg.UseAdam; break;
+                            case 6: trainCfg.Init = (trainCfg.Init + delta + 3) % 3; break;
+                            case 7: trainCfg.GradClip = trainCfg.GradClip <= 0f ? 1f : trainCfg.GradClip >= 5f ? 0f : trainCfg.GradClip + delta; break;
+                            case 8: trainCfg.UsePpo = !trainCfg.UsePpo; break;
+                        }
+                    }
                     if (window.KeyEnter)
                     {
-                        sim.ReconfigureBrain(hiddenLayers, hiddenNodes);
+                        sim.ReconfigureBrain(hiddenLayers, hiddenNodes, trainCfg.Clone());
                         window.KeyEnter = false;
                         aiMenu = false;
                     }
@@ -238,7 +258,7 @@ internal static class Program
                 renderer.Render(sim);
                 if (editor) renderer.RenderEditorOverlay(sim.Track, selectedPoint);
                 hud.Draw(window.Width, window.Height, sim, renderer, editor, selectedPoint,
-                    aiMenu, aiMenuRow, hiddenLayers, hiddenNodes, showBrain, brainFullscreen, showStatus,
+                    aiMenu, aiMenuRow, hiddenLayers, hiddenNodes, trainCfg, showBrain, brainFullscreen, showStatus,
                     orbitPaused);
 
                 window.Swap();

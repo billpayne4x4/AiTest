@@ -17,7 +17,7 @@ public class GameWindow : IDisposable
     // keyboard
     public bool KeyEsc, KeyEnter, KeySpace;
     public bool Key1, Key2, Key3;
-    public bool KeyA, KeyB, KeyDelete, KeyDown, KeyF, KeyH, KeyK, KeyLeft, KeyLeftBracket, KeyM, KeyN, KeyP, KeyR, KeyRight, KeyRightBracket, KeyS, KeyT, KeyUp, KeyV;
+    public bool KeyA, KeyB, KeyC, KeyDelete, KeyDown, KeyF, KeyH, KeyK, KeyLeft, KeyLeftBracket, KeyM, KeyN, KeyP, KeyR, KeyRight, KeyRightBracket, KeyS, KeyT, KeyUp, KeyV;
 
     // mouse
     public int MouseX, MouseY;
@@ -216,6 +216,7 @@ public class GameWindow : IDisposable
             case Sdl.K_3: Key3 = down; break;
             case Sdl.K_A: KeyA = down; break;
             case Sdl.K_B: KeyB = down; break;
+            case Sdl.K_C: KeyC = down; break;
             case Sdl.K_M: KeyM = down; break;
             case Sdl.K_DELETE: KeyDelete = down; break;
             case Sdl.K_F: KeyF = down; break;

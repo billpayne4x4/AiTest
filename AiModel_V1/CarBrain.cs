@@ -19,18 +19,24 @@ public class CarBrain
 {
     public VisionRays Rays { get; }
     public NeuralNetwork Net { get; }
+    public TrainingConfig TrainConfig { get; }
 
     // learning / perception tuning
     private const float LearningRate = 0.008f;
     private const float GuidanceLearningRate = 0.012f;
     private const float BaselineAlpha = 0.03f;   // how fast the reward baseline adapts
     private const float Exploration = 0.12f;      // action noise for exploration
+    private const float PpoClip = 0.2f;
 
     private float _baseline;
+    private float _value; // critic: running value estimate for PPO advantage
     private readonly Random _rng;
     private readonly float[] _lastExploration = new float[2];
 
     public CarBrain(VisionRays? rays = null, int seed = 2024, int hiddenLayerCount = 1, int hiddenNodeCount = 10)
+        : this(rays, seed, hiddenLayerCount, hiddenNodeCount, new TrainingConfig()) { }
+
+    public CarBrain(VisionRays? rays, int seed, int hiddenLayerCount, int hiddenNodeCount, TrainingConfig config)
     {
         Rays = rays ?? VisionRays.Default5;
         if (hiddenLayerCount < 1) throw new ArgumentOutOfRangeException(nameof(hiddenLayerCount));
@@ -42,7 +48,8 @@ public class CarBrain
         sizes[0] = Rays.Count + 2;
         for (int i = 0; i < hiddenLayerCount; i++) sizes[i + 1] = hiddenNodeCount;
         sizes[^1] = 2;
-        Net = new NeuralNetwork(sizes, seed);
+        TrainConfig = config;
+        Net = new NeuralNetwork(sizes, config, seed);
         _rng = new Random(seed + 7);
     }
 
@@ -87,20 +94,32 @@ public class CarBrain
         return (steer, throttle);
     }
 
-    /// <summary>Learn from this step's reward (policy gradient with a running baseline).</summary>
+    /// <summary>Learn from this step's reward (PPO-clipped advantage + entropy bonus, or plain policy gradient).</summary>
     public void Learn(float reward)
     {
-        float centered = reward - _baseline;
-        _baseline += BaselineAlpha * (reward - _baseline);
-        centered = Math.Clamp(centered, -5f, 5f);
+        float advantage;
+        if (TrainConfig.UsePpo)
+        {
+            // Critic update + clipped surrogate-style advantage.
+            float raw = reward - _value;
+            _value += BaselineAlpha * raw;
+            float scale = 1f + Math.Abs(_value);
+            advantage = Math.Clamp(raw / scale, -PpoClip, PpoClip) * scale;
+        }
+        else
+        {
+            advantage = reward - _baseline;
+            _baseline += BaselineAlpha * (reward - _baseline);
+            advantage = Math.Clamp(advantage, -5f, 5f);
+        }
         // REINFORCE/ES estimate: correlate the advantage with the independent
         // perturbation applied to each action. The old implementation sent the
         // same positive gradient to steer and throttle, inevitably saturating
         // steering at +1 and making the car circle.
         Net.PolicyGradientUpdate(new[]
         {
-            centered * _lastExploration[0],
-            centered * _lastExploration[1]
+            advantage * _lastExploration[0] + TrainConfig.EntropyBonus * NextGaussian(),
+            advantage * _lastExploration[1] + TrainConfig.EntropyBonus * NextGaussian()
         }, LearningRate);
     }
 

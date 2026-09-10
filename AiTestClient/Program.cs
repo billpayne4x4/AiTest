@@ -10,7 +10,7 @@ namespace AiTestClient;
 /// Speed modes:
 ///   NORMAL    - one simulation step per rendered frame (real time)
 ///   STEP      - paused; press SPACE to advance one step at a time
-///   SUPERFAST - many simulation steps per rendered frame (watch it learn fast)
+///   SUPERFAST - as many simulation steps as fit in ~10ms per frame (watch it learn fast)
 ///
 /// Keys: 1/2/3 camera, N/F/S speed, R retrain, T track editor, ESC quit.
 /// </summary>
@@ -360,7 +360,21 @@ internal static class Program
                         PaceReset();
                         break;
                     case Speed.SuperFast:
-                        if (!aiMenu && !physMenu && !rewMenu) for (int i = 0; i < 200; i++) sim.Step();
+                        // Time-budgeted: run as many steps as fit in ~10ms per
+                        // frame, so STEPS/S reflects real compute throughput
+                        // and the CPU/GPU (D) toggle shows a visible difference.
+                        // (A fixed steps/frame count would just mirror fps.)
+                        if (!aiMenu && !physMenu && !rewMenu)
+                        {
+                            long t0 = Stopwatch.GetTimestamp();
+                            long freq = Stopwatch.Frequency;
+                            int n = 0;
+                            while (n < 50000 && (double)(Stopwatch.GetTimestamp() - t0) / freq < 0.010)
+                            {
+                                sim.Step();
+                                n++;
+                            }
+                        }
                         PaceReset();
                         break;
                 }

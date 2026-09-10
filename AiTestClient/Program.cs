@@ -45,10 +45,12 @@ internal static class Program
             int draggingPoint = -1;
             int selectedPoint = -1;
             bool aiMenu = false;
+            bool physMenu = false, rewMenu = false;
+            int physRow = 0, rewRow = 0;
             int aiMenuRow = 0;
             const int AiMenuRows = 9;
-            int hiddenLayers = 1;
-            int hiddenNodes = 10;
+            int hiddenLayers = 32;
+            int hiddenNodes = 16;
             var trainCfg = new AiModel_V1.TrainingConfig();
             bool showBrain = true;
             bool brainFullscreen = false;
@@ -64,15 +66,31 @@ internal static class Program
                 if (window.KeyM || window.KeyC)
                 {
                     aiMenu = !aiMenu;
+                    physMenu = rewMenu = false;
                     editor = false;
                     window.KeyM = false;
                     window.KeyC = false;
                 }
-                // Clickable [AI SETUP] button (bottom-left, above controls panel).
-                if (window.MousePressed && !aiMenu && Hud.AiButtonHit(window.Width, window.Height, window.MouseX, window.MouseY))
+                if (window.KeyE)
                 {
-                    aiMenu = true;
+                    physMenu = !physMenu;
+                    aiMenu = rewMenu = false;
                     editor = false;
+                    window.KeyE = false;
+                }
+                if (window.KeyW)
+                {
+                    rewMenu = !rewMenu;
+                    aiMenu = physMenu = false;
+                    editor = false;
+                    window.KeyW = false;
+                }
+                // Clickable menu buttons (bottom-left, above controls panel).
+                if (window.MousePressed && !aiMenu && !physMenu && !rewMenu)
+                {
+                    if (Hud.AiButtonHit(window.Width, window.Height, window.MouseX, window.MouseY)) { aiMenu = true; editor = false; }
+                    else if (Hud.PhysButtonHit(window.Width, window.Height, window.MouseX, window.MouseY)) { physMenu = true; editor = false; }
+                    else if (Hud.RewButtonHit(window.Width, window.Height, window.MouseX, window.MouseY)) { rewMenu = true; editor = false; }
                 }
                 if (window.KeyB)
                 {
@@ -104,6 +122,8 @@ internal static class Program
                 if (window.KeyEsc)
                 {
                     if (aiMenu) aiMenu = false;
+                    else if (physMenu) physMenu = false;
+                    else if (rewMenu) rewMenu = false;
                     else window.Quit = true;
                     window.KeyEsc = false;
                 }
@@ -136,6 +156,57 @@ internal static class Program
                         aiMenu = false;
                     }
                 }
+                if (physMenu)
+                {
+                    const int PhysRows = 7;
+                    if (window.KeyUp) { physRow = (physRow + PhysRows - 1) % PhysRows; window.KeyUp = false; }
+                    if (window.KeyDown) { physRow = (physRow + 1) % PhysRows; window.KeyDown = false; }
+                    float delta = 0;
+                    if (window.KeyLeft) { delta = -1; window.KeyLeft = false; }
+                    if (window.KeyRight) { delta = 1; window.KeyRight = false; }
+                    if (delta != 0)
+                    {
+                        var p = sim.PhysicsCfg;
+                        switch (physRow)
+                        {
+                            case 0: p.Realistic = !p.Realistic; break;
+                            case 1: p.Grip = Math.Clamp(p.Grip + delta * 2f, 2f, 60f); break;
+                            case 2: p.Downforce = Math.Clamp(p.Downforce + delta * 0.05f, 0f, 2f); break;
+                            case 3: p.Steering = Math.Clamp(p.Steering + delta * 0.05f, 0.1f, 1.2f); break;
+                            case 4: p.Oversteer = Math.Clamp(p.Oversteer + delta * 0.25f, 0f, 3f); break;
+                            case 5: p.SpinThreshold = Math.Clamp(p.SpinThreshold + delta, 3f, 25f); break;
+                            case 6: p.Understeer = !p.Understeer; break;
+                        }
+                    }
+                    if (window.KeyEnter) { physMenu = false; window.KeyEnter = false; }
+                }
+                if (rewMenu)
+                {
+                    const int RewRows = 10;
+                    if (window.KeyUp) { rewRow = (rewRow + RewRows - 1) % RewRows; window.KeyUp = false; }
+                    if (window.KeyDown) { rewRow = (rewRow + 1) % RewRows; window.KeyDown = false; }
+                    float delta = 0;
+                    if (window.KeyLeft) { delta = -1; window.KeyLeft = false; }
+                    if (window.KeyRight) { delta = 1; window.KeyRight = false; }
+                    if (delta != 0)
+                    {
+                        var r = sim.RewardCfg;
+                        switch (rewRow)
+                        {
+                            case 0: r.Speed = Math.Max(0f, r.Speed + delta * 0.5f); break;
+                            case 1: r.Centering = Math.Max(0f, r.Centering + delta * 0.25f); break;
+                            case 2: r.Alignment = Math.Max(0f, r.Alignment + delta * 0.25f); break;
+                            case 3: r.Progress = Math.Max(0f, r.Progress + delta * 250f); break;
+                            case 4: r.WrongWay = Math.Max(0f, r.WrongWay + delta * 0.25f); break;
+                            case 5: r.Slide = Math.Max(0f, r.Slide + delta); break;
+                            case 6: r.Spin = Math.Max(0f, r.Spin + delta); break;
+                            case 7: r.Understeer = Math.Max(0f, r.Understeer + delta * 0.5f); break;
+                            case 8: r.SteerEffort = Math.Max(0f, r.SteerEffort + delta * 0.02f); break;
+                            case 9: r.OffTrack = Math.Max(0f, r.OffTrack + delta * 2f); break;
+                        }
+                    }
+                    if (window.KeyEnter) { rewMenu = false; window.KeyEnter = false; }
+                }
 
                 // ---- input: mode switching (edge-triggered) ----
                 if (window.Key1) { renderer.Mode = CameraMode.Orbit; window.Key1 = false; }
@@ -145,6 +216,12 @@ internal static class Program
                 if (window.KeyF) { speed = Speed.Step; window.KeyF = false; }
                 if (window.KeyS) { speed = Speed.SuperFast; window.KeyS = false; }
                 if (window.KeyR) { sim.RetrainBrain(); window.KeyR = false; }
+                if (window.KeyG)
+                {
+                    sim.Track.Randomize(Environment.TickCount);
+                    sim.ResetCar();
+                    window.KeyG = false;
+                }
                 if (window.KeyT)
                 {
                     editor = !editor;
@@ -204,8 +281,13 @@ internal static class Program
                     {
                         if (window.MouseDown && renderer.UnprojectToGround(window.Width, window.Height, window.MouseX, window.MouseY, out var wx, out var wz))
                         {
-                            sim.Track.ControlPoints[draggingPoint] = (wx, wz);
-                            editorDirty = true;
+                            // Reject drops that would twist the road (curb
+                            // crossover): the point simply stays put.
+                            if (sim.Track.IsValidControlPoint(draggingPoint, wx, wz))
+                            {
+                                sim.Track.ControlPoints[draggingPoint] = (wx, wz);
+                                editorDirty = true;
+                            }
                         }
                         else
                         {
@@ -233,10 +315,10 @@ internal static class Program
                 switch (speed)
                 {
                     case Speed.Normal:
-                        if (!editor && !aiMenu && PaceNormalStep()) sim.Step();
+                        if (!editor && !aiMenu && !physMenu && !rewMenu && PaceNormalStep()) sim.Step();
                         break;
                     case Speed.Step:
-                        if (!aiMenu && window.KeySpace)
+                        if (!aiMenu && !physMenu && !rewMenu && window.KeySpace)
                         {
                             sim.Step();
                             window.KeySpace = false;
@@ -246,20 +328,21 @@ internal static class Program
                         PaceReset();
                         break;
                     case Speed.SuperFast:
-                        if (!aiMenu) for (int i = 0; i < 200; i++) sim.Step();
+                        if (!aiMenu && !physMenu && !rewMenu) for (int i = 0; i < 200; i++) sim.Step();
                         PaceReset();
                         break;
                 }
 
                 // ---- render ----
                 renderer.UpdateCamera(sim, dt, window.MouseX, window.MouseY,
-                    window.MouseDown && !editor && !aiMenu, window.MouseWheelY, orbitPaused);
+                    window.MouseDown && !editor && !aiMenu && !physMenu && !rewMenu, window.MouseWheelY, orbitPaused);
                 renderer.BeginFrame(window.Width, window.Height);
                 renderer.Render(sim);
                 if (editor) renderer.RenderEditorOverlay(sim.Track, selectedPoint);
                 hud.Draw(window.Width, window.Height, sim, renderer, editor, selectedPoint,
-                    aiMenu, aiMenuRow, hiddenLayers, hiddenNodes, trainCfg, showBrain, brainFullscreen, showStatus,
-                    orbitPaused);
+                    aiMenu, aiMenuRow, hiddenLayers, hiddenNodes, trainCfg,
+                    physMenu, physRow, rewMenu, rewRow,
+                    showBrain, brainFullscreen, showStatus, orbitPaused);
 
                 window.Swap();
             }

@@ -31,7 +31,7 @@ public class CarBrain
     private float _baseline;
     private float _value; // critic: running value estimate for PPO advantage
     private readonly Random _rng;
-    private readonly float[] _lastExploration = new float[2];
+    private readonly float[] _lastExploration = new float[3];
 
     public CarBrain(VisionRays? rays = null, int seed = 2024, int hiddenLayerCount = 1, int hiddenNodeCount = 10)
         : this(rays, seed, hiddenLayerCount, hiddenNodeCount, new TrainingConfig()) { }
@@ -47,7 +47,7 @@ public class CarBrain
         // heading error so the policy can learn which way is forward.
         sizes[0] = Rays.Count + 2;
         for (int i = 0; i < hiddenLayerCount; i++) sizes[i + 1] = hiddenNodeCount;
-        sizes[^1] = 2;
+        sizes[^1] = 3; // steer, throttle, brake
         TrainConfig = config;
         Net = new NeuralNetwork(sizes, config, seed);
         _rng = new Random(seed + 7);
@@ -72,26 +72,31 @@ public class CarBrain
         return inputs;
     }
 
-    /// <summary>Produce the (steer, throttle) action for the given normalized inputs.</summary>
-    public (float steer, float throttle) Act(float[] inputs, bool addNoise = true)
+    /// <summary>Produce the (steer, throttle, brake) action for the given normalized inputs.</summary>
+    public (float steer, float throttle, float brake) Act(float[] inputs, bool addNoise = true)
     {
         var outp = Net.Forward(inputs);
         float steerOutput = outp[0];
         float throttleOutput = outp[1];
+        float brakeOutput = outp[2];
         if (addNoise)
         {
             _lastExploration[0] = NextGaussian();
             _lastExploration[1] = NextGaussian();
+            _lastExploration[2] = NextGaussian();
             steerOutput += _lastExploration[0] * Exploration;
             throttleOutput += _lastExploration[1] * Exploration;
+            brakeOutput += _lastExploration[2] * Exploration;
         }
         else Array.Clear(_lastExploration);
 
         float steer = steerOutput;                              // -1..1
         float throttle = (throttleOutput + 1f) * 0.5f;          // 0..1
+        float brake = (brakeOutput + 1f) * 0.5f;                // 0..1
         steer = Math.Clamp(steer, -1f, 1f);
         throttle = Math.Clamp(throttle, 0f, 1f);
-        return (steer, throttle);
+        brake = Math.Clamp(brake, 0f, 1f);
+        return (steer, throttle, brake);
     }
 
     /// <summary>Learn from this step's reward (PPO-clipped advantage + entropy bonus, or plain policy gradient).</summary>
@@ -119,17 +124,19 @@ public class CarBrain
         Net.PolicyGradientUpdate(new[]
         {
             advantage * _lastExploration[0] + TrainConfig.EntropyBonus * NextGaussian(),
-            advantage * _lastExploration[1] + TrainConfig.EntropyBonus * NextGaussian()
+            advantage * _lastExploration[1] + TrainConfig.EntropyBonus * NextGaussian(),
+            advantage * _lastExploration[2] + TrainConfig.EntropyBonus * NextGaussian()
         }, LearningRate);
     }
 
-    public void LearnGuided(float reward, float[] inputs, float targetSteer, float targetThrottle)
+    public void LearnGuided(float reward, float[] inputs, float targetSteer, float targetThrottle, float targetBrake)
     {
         Learn(reward);
         Net.SupervisedUpdate(inputs, new[]
         {
             Math.Clamp(targetSteer, -1f, 1f),
-            Math.Clamp(targetThrottle * 2f - 1f, -1f, 1f)
+            Math.Clamp(targetThrottle * 2f - 1f, -1f, 1f),
+            Math.Clamp(targetBrake * 2f - 1f, -1f, 1f)
         }, GuidanceLearningRate);
     }
 
@@ -137,6 +144,7 @@ public class CarBrain
     {
         Net.Reinitialize(seed);
         _baseline = 0f;
+        _value = 0f;
     }
 
     /// <summary>
@@ -147,6 +155,7 @@ public class CarBrain
     public void ResetLearningState()
     {
         _baseline = 0f;
+        _value = 0f;
         Array.Clear(_lastExploration);
     }
 

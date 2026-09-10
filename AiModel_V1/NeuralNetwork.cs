@@ -171,12 +171,13 @@ public class NeuralNetwork
             for (int j = 0; j < fanOut; j++)
                 _activations[l + 1][j] = Activate(_normed[l + 1][j], isOutput);
 
-            // Residual: x + F(x) when shapes match (hidden layers only).
-            // Scaled by 1/sqrt(2) so variance stays ~constant with depth;
-            // unscaled residuals grow activations ~linearly and saturate
-            // the outputs (constant full-lock steer = driving in circles).
+            // Residual: x + F(x) when shapes match (hidden layers only),
+            // unscaled (standard ResNet form). LayerNorm above already keeps
+            // variance stable, so no 1/sqrt(2) downscaling: that shrinks the
+            // signal by 0.7071 per layer (~1e-5 over 32 layers), causing
+            // vanishing activations followed by saturating blowup.
             if (Config.UseResidual && !isOutput && _sizes[l + 1] == _sizes[l])
-                for (int j = 0; j < fanOut; j++) _activations[l + 1][j] = (_activations[l + 1][j] + a[j]) * 0.7071f;
+                for (int j = 0; j < fanOut; j++) _activations[l + 1][j] += a[j];
 
             // Clamp hidden activations so GELU's unbounded positive side
             // can't run away over many generations (pinned-high nodes and
@@ -253,12 +254,26 @@ public class NeuralNetwork
                     wij[i] += ApplyUpdate(l, j, i, grad, learningRate, true);
                     _delta[l][i] += wOld * dj;
                 }
-                if (residual && j < _delta[l].Length) _delta[l][j] += dj * 0.7071f; // skip path (matches scaled forward)
+                if (residual && j < _delta[l].Length) _delta[l][j] += dj; // skip path (identity)
             }
             for (int i = 0; i < _delta[l].Length; i++)
                 _delta[l][i] *= ActivateDeriv(_normed[l][i], _activations[l][i], false);
             for (int j = 0; j < _biases[l].Length; j++)
                 _biases[l][j] += ApplyUpdate(l, j, 0, dNext[j], learningRate, false);
+            // MaxNorm: hard cap per-neuron weight norm so no layer can ever
+            // saturate no matter how many generations train.
+            for (int j = 0; j < w.Length; j++)
+            {
+                float n2 = 0f;
+                var wij = w[j];
+                for (int i = 0; i < wij.Length; i++) n2 += wij[i] * wij[i];
+                float n = (float)Math.Sqrt(n2);
+                if (n > 3f)
+                {
+                    float s = 3f / n;
+                    for (int i = 0; i < wij.Length; i++) wij[i] *= s;
+                }
+            }
         }
     }
 

@@ -17,7 +17,7 @@ public class GameWindow : IDisposable
     // keyboard
     public bool KeyEsc, KeyEnter, KeySpace;
     public bool Key1, Key2, Key3;
-    public bool KeyA, KeyB, KeyC, KeyDelete, KeyDown, KeyF, KeyH, KeyK, KeyLeft, KeyLeftBracket, KeyM, KeyN, KeyP, KeyR, KeyRight, KeyRightBracket, KeyS, KeyT, KeyUp, KeyV;
+    public bool KeyA, KeyB, KeyC, KeyDelete, KeyDown, KeyE, KeyF, KeyG, KeyH, KeyK, KeyLeft, KeyLeftBracket, KeyM, KeyN, KeyP, KeyR, KeyRight, KeyRightBracket, KeyS, KeyT, KeyUp, KeyV, KeyW;
 
     // mouse
     public int MouseX, MouseY;
@@ -27,7 +27,7 @@ public class GameWindow : IDisposable
 
     public bool Quit;
 
-    public GameWindow(string title, int w = 1280, int h = 720)
+    public GameWindow(string title, int w = 1920, int h = 1080)
     {
         NativeLibs.Install();
 
@@ -217,9 +217,11 @@ public class GameWindow : IDisposable
             case Sdl.K_A: KeyA = down; break;
             case Sdl.K_B: KeyB = down; break;
             case Sdl.K_C: KeyC = down; break;
+            case Sdl.K_E: KeyE = down; break;
             case Sdl.K_M: KeyM = down; break;
             case Sdl.K_DELETE: KeyDelete = down; break;
             case Sdl.K_F: KeyF = down; break;
+            case Sdl.K_G: KeyG = down; break;
             case Sdl.K_H: KeyH = down; break;
             case Sdl.K_K: KeyK = down; break;
             case Sdl.K_N: KeyN = down; break;
@@ -228,6 +230,7 @@ public class GameWindow : IDisposable
             case Sdl.K_S: KeyS = down; break;
             case Sdl.K_T: KeyT = down; break;
             case Sdl.K_V: KeyV = down; break;
+            case Sdl.K_W: KeyW = down; break;
             case Sdl.K_LEFTBRACKET: KeyLeftBracket = down; break;
             case Sdl.K_RIGHTBRACKET: KeyRightBracket = down; break;
             case Sdl.K_RIGHT: KeyRight = down; break;

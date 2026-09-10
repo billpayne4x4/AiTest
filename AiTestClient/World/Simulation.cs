@@ -24,12 +24,15 @@ public class Simulation
     public Track Track { get; }
     public Car Car { get; }
     public CarBrain Brain { get; private set; }
+    public PhysicsConfig PhysicsCfg { get; set; } = new();
+    public RewardConfig RewardCfg { get; set; } = new();
 
     // latest step outputs (for the UI)
     public float[] Inputs { get; private set; } = Array.Empty<float>();
     public float[] RayDistances { get; private set; } = Array.Empty<float>();
     public float Steer { get; private set; }
     public float Throttle { get; private set; }
+    public float Brake { get; private set; }
     public float Reward { get; private set; }
     public float[] NodeActivations { get; private set; } = Array.Empty<float>(); // flattened, layer-major
     public bool OffTrack { get; private set; }
@@ -52,7 +55,7 @@ public class Simulation
     public Simulation(VisionRays? rays = null)
     {
         Track = new Track(5f);
-        Brain = new CarBrain(rays);
+        Brain = new CarBrain(rays, 2024, 32, 16);
         var (sx, sz) = Track.CenterAt(0f);
         var (tx, tz) = Track.TangentAt(0f);
         Car = new Car(sx, sz, (float)Math.Atan2(tz, tx));
@@ -136,10 +139,10 @@ public class Simulation
         Inputs = Brain.Normalize(RayDistances, (float)Math.Sin(headingError), (float)Math.Cos(headingError));
 
         // 2) act
-        (Steer, Throttle) = Brain.Act(Inputs);
+        (Steer, Throttle, Brake) = Brain.Act(Inputs);
 
         // 3) move
-        Car.Apply(Steer, Throttle, Dt);
+        Car.Apply(Steer, Throttle, Brake, Dt, PhysicsCfg);
 
         // 4) reward
         OffTrack = !Track.IsOnTrack(Car.X, Car.Z);
@@ -167,22 +170,30 @@ public class Simulation
         var (carFx, carFz) = Car.ForwardDir();
         float alignment = carFx * trackTx + carFz * trackTz;
         float speed01 = Car.Speed / Car.MaxSpeed;
-        // Standing still no longer earns a centering reward. Forward progress
-        // in the track's defined direction is the dominant signal; reverse
-        // progress receives the same magnitude as a penalty.
-        float reward = 0.3f * centering * speed01
-                     + 1.5f * alignment * speed01
-                     + 1500f * dProg
-                     - (alignment < 0f ? 1.5f * -alignment * speed01 : 0f)
-                     - 0.08f * Math.Abs(Steer)
-                     - (OffTrack ? 12f : 0f);
+        float slip01 = Math.Clamp(Car.LateralSlip / PhysicsCfg.SpinThreshold, 0f, 1f);
+        // All shaping weights live in RewardCfg (rewards menu, W).
+        var rc = RewardCfg;
+        float reward = rc.Speed * speed01
+                     + rc.Centering * centering * speed01
+                     + rc.Alignment * alignment * speed01
+                     + rc.Progress * dProg
+                     - (alignment < 0f ? rc.WrongWay * -alignment * speed01 : 0f)
+                     - rc.Slide * slip01
+                     - (Car.Spinning ? rc.Spin : 0f)
+                     - (Car.Understeering ? rc.Understeer : 0f)
+                     - rc.SteerEffort * Math.Abs(Steer)
+                     - (OffTrack ? rc.OffTrack : 0f);
         Reward = reward;
         TotalReward += reward;
 
         // 5) learn
+        float corner = Math.Clamp(Math.Abs(headingError), 0f, 1f);
         float targetSteer = Math.Clamp(headingError * 1.4f, -1f, 1f);
-        float targetThrottle = 0.85f - 0.45f * Math.Clamp(Math.Abs(headingError), 0f, 1f);
-        Brain.LearnGuided(reward, Inputs, targetSteer, targetThrottle);
+        // Fast on straights, lift into corners; brake hard when facing the
+        // wrong way at speed.
+        float targetThrottle = 0.95f - 0.55f * corner;
+        float targetBrake = (corner > 0.45f && speed01 > 0.5f) ? 1f : 0f;
+        Brain.LearnGuided(reward, Inputs, targetSteer, targetThrottle, targetBrake);
 
         // capture node activations for the UI (flattened, layer-major)
         CaptureActivations();

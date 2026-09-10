@@ -88,6 +88,57 @@ public class Track
         Rebuild();
     }
 
+    /// <summary>
+    /// Generate a random but always-drivable loop: control points are placed
+    /// around an ellipse at sorted angles with bounded radial noise, so the
+    /// polygon is star-shaped and can never self-intersect (no twisted curbs).
+    /// </summary>
+    public void Randomize(int seed)
+    {
+        var rng = new Random(seed);
+        int n = rng.Next(8, 13);
+        float baseA = 26f + (float)rng.NextDouble() * 10f;
+        float baseB = 17f + (float)rng.NextDouble() * 8f;
+        var pts = new List<(float x, float z)>(n);
+        for (int i = 0; i < n; i++)
+        {
+            // Even spacing + small jitter (kept under half a step so order
+            // around the circle — and hence non-intersection — is preserved).
+            double ang = (i / (double)n) * 2.0 * Math.PI
+                + (((float)rng.NextDouble() * 2f - 1f) * Math.PI / n * 0.45);
+            float r = 0.78f + (float)rng.NextDouble() * 0.44f; // 0.78..1.22
+            pts.Add(((float)(baseA * r * Math.Cos(ang)), (float)(baseB * r * Math.Sin(ang))));
+        }
+        ControlPoints.Clear();
+        ControlPoints.AddRange(pts);
+        Rebuild();
+    }
+
+    /// <summary>
+    /// True if moving a control point here keeps the road untwisted: the new
+    /// position must stay clear of all non-neighboring road samples, otherwise
+    /// the ribbon crosses itself and curbs appear twisted.
+    /// </summary>
+    public bool IsValidControlPoint(int index, float x, float z)
+    {
+        int n = ControlPoints.Count;
+        if (n < 3 || index < 0 || index >= n || _sampleCount == 0) return true;
+        const int perSeg = SamplesPerSection;
+        float minD2 = float.MaxValue;
+        for (int s = 0; s < _sampleCount; s++)
+        {
+            int seg = s / perSeg;
+            int d = Math.Abs(seg - index);
+            int ring = Math.Min(d, n - d);
+            if (ring <= 1) continue; // own + neighboring sections are fine
+            float dx = _sx[s] - x, dz = _sz[s] - z;
+            float d2 = dx * dx + dz * dz;
+            if (d2 < minD2) minD2 = d2;
+        }
+        float clearance = HalfWidth * 2.2f;
+        return minD2 >= clearance * clearance;
+    }
+
     /// <summary>Re-sample the spline and rebuild the spatial grid.</summary>
     public void Rebuild()
     {

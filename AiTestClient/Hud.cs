@@ -142,6 +142,7 @@ public class Hud
 
     public void Draw(int w, int h, Simulation sim, Renderer renderer, bool editorEnabled, int selectedPoint,
         bool aiMenu, int aiMenuRow, int hiddenLayers, int hiddenNodes, AiModel_V1.TrainingConfig cfg,
+        bool physMenu, int physRow, bool rewMenu, int rewRow,
         bool showBrain, bool brainFullscreen, bool showStatus, bool orbitPaused)
     {
         Begin2D(w, h);
@@ -175,12 +176,16 @@ public class Hud
         DrawText(20, h - 98, "N/F/S  NORMAL/STEP/SUPERFAST", 1, 0.7f, 0.7f, 0.7f);
         DrawText(20, h - 84, "K NEW GENERATION OFF TRACK", 1, 0.7f, 0.7f, 0.7f);
         DrawText(20, h - 70, "SPACE  STEP (IN STEP MODE)", 1, 0.7f, 0.7f, 0.7f);
-        DrawText(20, h - 56, "R RETRAIN  T TRACK  M/C AI MENU", 1, 0.7f, 0.7f, 0.7f);
-        DrawText(20, h - 42, "B BRAIN  V FULL BRAIN  H STATUS", 1, 0.7f, 0.7f, 0.7f);
+        DrawText(20, h - 56, "R RETRAIN  G RANDOM TRACK  T TRACK  M/C AI MENU", 1, 0.7f, 0.7f, 0.7f);
+        DrawText(20, h - 42, "E PHYSICS  W REWARDS  B BRAIN  V FULL  H STATUS", 1, 0.7f, 0.7f, 0.7f);
         DrawText(20, h - 28, "ESC  QUIT", 1, 0.7f, 0.7f, 0.7f);
-        // Clickable button that opens the AI menu (see AiButtonHit).
+        // Clickable buttons that open the menus (see *ButtonHit).
         DrawPanel(10, h - 186, 150, 24, 0.1f, 0.3f, 0.45f, 0.9f);
         DrawText(24, h - 180, "[AI SETUP] (M)", 1, 1f, 1f, 1f);
+        DrawPanel(166, h - 186, 150, 24, 0.1f, 0.35f, 0.3f, 0.9f);
+        DrawText(180, h - 180, "[PHYSICS] (E)", 1, 1f, 1f, 1f);
+        DrawPanel(322, h - 186, 150, 24, 0.35f, 0.3f, 0.1f, 0.9f);
+        DrawText(336, h - 180, "[REWARDS] (W)", 1, 1f, 1f, 1f);
         }
 
         // ---- AI brain panel (top-right) ----
@@ -199,6 +204,10 @@ public class Hud
 
         if (aiMenu)
             DrawAiMenu(w, h, aiMenuRow, hiddenLayers, hiddenNodes, cfg);
+        if (physMenu)
+            DrawPhysicsMenu(w, h, physRow, sim.PhysicsCfg);
+        if (rewMenu)
+            DrawRewardsMenu(w, h, rewRow, sim.RewardCfg);
 
         End2D();
     }
@@ -206,6 +215,66 @@ public class Hud
     /// <summary>Hit-test for the clickable [AI SETUP] button (screen coords, origin top-left).</summary>
     public static bool AiButtonHit(int w, int h, int mx, int my)
         => mx >= 10 && mx <= 160 && my >= h - 186 && my <= h - 162;
+
+    public static bool PhysButtonHit(int w, int h, int mx, int my)
+        => mx >= 166 && mx <= 316 && my >= h - 186 && my <= h - 162;
+
+    public static bool RewButtonHit(int w, int h, int mx, int my)
+        => mx >= 322 && mx <= 472 && my >= h - 186 && my <= h - 162;
+
+    private void DrawMenuFrame(int w, int h, string title, int rows, out int x, out int y)
+    {
+        const int mw = 480;
+        int mh = 110 + rows * 30;
+        x = (w - mw) / 2; y = (h - mh) / 2;
+        DrawPanel(x, y, mw, mh, 0.03f, 0.05f, 0.09f, 0.96f);
+        DrawText(x + 24, y + 18, title, 2, 0.35f, 0.9f, 1f);
+    }
+
+    private void DrawMenuRows(int x, int y, int selectedRow, string[] rows)
+    {
+        for (int i = 0; i < rows.Length; i++)
+        {
+            bool sel = selectedRow == i;
+            DrawText(x + 35, y + 62 + i * 30, (sel ? "> " : "  ") + rows[i], 2,
+                sel ? 1f : 0.75f, sel ? 0.8f : 0.75f, 0.35f);
+        }
+        DrawText(x + 24, y + 62 + rows.Length * 30 + 8, "UP/DOWN SELECT  LEFT/RIGHT CHANGE", 1, 0.7f, 0.8f, 0.9f);
+        DrawText(x + 24, y + 62 + rows.Length * 30 + 26, "ENTER DONE  ESC CANCEL", 1, 0.7f, 0.8f, 0.9f);
+    }
+
+    private void DrawPhysicsMenu(int w, int h, int selectedRow, PhysicsConfig p)
+    {
+        DrawMenuFrame(w, h, "PHYSICS TUNING", 7, out int x, out int y);
+        DrawMenuRows(x, y, selectedRow, new[]
+        {
+            "REALISTIC PHYSICS: " + OnOff(p.Realistic),
+            "GRIP: " + p.Grip.ToString("F1"),
+            "DOWNFORCE: " + p.Downforce.ToString("F2"),
+            "STEERING: " + p.Steering.ToString("F2"),
+            "OVERSTEER: " + p.Oversteer.ToString("F2"),
+            "SPIN THRESHOLD: " + p.SpinThreshold.ToString("F1"),
+            "UNDERSTEER: " + OnOff(p.Understeer),
+        });
+    }
+
+    private void DrawRewardsMenu(int w, int h, int selectedRow, RewardConfig r)
+    {
+        DrawMenuFrame(w, h, "REWARD SHAPING", 10, out int x, out int y);
+        DrawMenuRows(x, y, selectedRow, new[]
+        {
+            "SPEED: " + r.Speed.ToString("F2"),
+            "CENTERING: " + r.Centering.ToString("F2"),
+            "ALIGNMENT: " + r.Alignment.ToString("F2"),
+            "PROGRESS: " + r.Progress.ToString("F0"),
+            "WRONG WAY: " + r.WrongWay.ToString("F2"),
+            "SLIDE: " + r.Slide.ToString("F2"),
+            "SPIN: " + r.Spin.ToString("F2"),
+            "UNDERSTEER: " + r.Understeer.ToString("F2"),
+            "STEER EFFORT: " + r.SteerEffort.ToString("F3"),
+            "OFF TRACK: " + r.OffTrack.ToString("F1"),
+        });
+    }
 
     private static string OnOff(bool b) => b ? "ON" : "OFF";
     private static string ActName(int a) => a == 1 ? "RELU" : a == 2 ? "GELU" : "TANH";
@@ -321,6 +390,7 @@ public class Hud
         DrawText((int)graphRight - 12, (int)graphBottom + 12, "OUT", 1, 1f, 0.7f, 0.4f);
         // steer / throttle readout
         DrawText(px + 10, py + ph - 22, "GAS: " + sim.Throttle.ToString("F2") +
+            "  BRK: " + sim.Brake.ToString("F2") +
             "  STEER: " + sim.Steer.ToString("F2") + "  LAYERS: " + (L - 2) +
             "  NODES: " + (L > 2 ? sizes[1] : 0), 1, 0.8f, 0.8f, 0.8f);
         if (fullscreen) DrawText(px + pw - 155, py + 12, "V CLOSE", 1, 0.7f, 0.8f, 0.9f);

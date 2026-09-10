@@ -196,8 +196,11 @@ public class Simulation
         headingError = (float)Math.Atan2(Math.Sin(headingError), Math.Cos(headingError));
         Inputs = Brain.Normalize(RayDistances, (float)Math.Sin(headingError), (float)Math.Cos(headingError));
 
-        // 2) act
+        // 2) act (NaN firewall: a diverged brain must stall the car, not crash the app)
         (Steer, Throttle, Brake) = Brain.Act(Inputs);
+        if (!float.IsFinite(Steer)) Steer = 0f;
+        if (!float.IsFinite(Throttle)) Throttle = 0f;
+        if (!float.IsFinite(Brake)) Brake = 0f;
 
         // 3) move
         Car.Apply(Steer, Throttle, Brake, Dt, PhysicsCfg);

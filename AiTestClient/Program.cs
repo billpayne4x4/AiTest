@@ -21,13 +21,15 @@ internal static class Program
     private static void Main(string[] args)
     {
         // Headless mode: run the AI + simulation with no window/GPU.
-        //   --headless [steps]   (default 6000 steps)
+        //   --headless [steps] [--layers N] [--nodes M] [--gpu] [--kill-offtrack]
         if (args.Length > 0 && args[0] == "--headless")
         {
             int steps = 6000;
             if (args.Length > 1 && int.TryParse(args[1], out var s)) steps = s;
+            int layers = ArgValue(args, "--layers", 2);
+            int nodes = ArgValue(args, "--nodes", 32);
             RunHeadless(steps, Array.Exists(args, arg => arg == "--kill-offtrack"),
-                Array.Exists(args, arg => arg == "--gpu"));
+                Array.Exists(args, arg => arg == "--gpu"), layers, nodes);
             return;
         }
         // GPU parity self-test: same-seed CPU vs GPU math comparison, no window.
@@ -403,6 +405,13 @@ internal static class Program
     /// Returns true when a Normal-speed sim step is due (~60Hz). Sleeps
     /// briefly when ahead of schedule so the loop idles instead of spinning.
     /// </summary>
+    private static int ArgValue(string[] args, string name, int def)
+    {
+        for (int i = 0; i + 1 < args.Length; i++)
+            if (args[i] == name && int.TryParse(args[i + 1], out var v))
+                return Math.Max(1, v);
+        return def;
+    }
     private static bool PaceNormalStep()
     {
         long freq = Stopwatch.Frequency;
@@ -428,13 +437,15 @@ internal static class Program
     /// learning loop headlessly (e.g. on a machine whose GPU is busy) and for
     /// benchmarking. Prints periodic progress so you can watch the car improve.
     /// </summary>
-    private static void RunHeadless(int steps, bool killOffTrack, bool useGpu)
+    private static void RunHeadless(int steps, bool killOffTrack, bool useGpu, int layers, int nodes)
     {
         var sim = new Simulation();
         sim.NewGenerationOnOffTrack = killOffTrack;
+        if (layers != 2 || nodes != 32) sim.ReconfigureBrain(layers, nodes, new AiModel_V1.TrainingConfig());
         if (useGpu && !sim.Brain.Net.TryEnableGpu(out string gpuMsg))
             Console.WriteLine("Compute: " + gpuMsg + " (staying on CPU)");
-        Console.WriteLine($"Headless: {steps} steps, 5-ray vision, net 7-32-32-3, device {sim.Brain.Net.DeviceLabel}");
+        var sw = Stopwatch.StartNew();
+        Console.WriteLine($"Headless: {steps} steps, 5-ray vision, net 7-{layers}x{nodes}-3, device {sim.Brain.Net.DeviceLabel}");
         Console.WriteLine("      step  lap   speed offTrack  totalReward  bestProg");
 
         for (int i = 0; i < steps; i++)
@@ -449,5 +460,6 @@ internal static class Program
 
         Console.WriteLine();
         Console.WriteLine($"Done. Generation: {sim.Generation}, laps completed: {sim.Laps}, best lap progress: {sim.BestLapProgress:F3}, total reward: {sim.TotalReward:F1}");
+        Console.WriteLine($"Wall time: {sw.Elapsed.TotalSeconds:F1}s = {steps / Math.Max(0.01, sw.Elapsed.TotalSeconds):N0} steps/s");
     }
 }

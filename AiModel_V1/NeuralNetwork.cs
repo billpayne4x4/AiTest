@@ -54,7 +54,8 @@ public class NeuralNetwork
         int maxW = 0;
         foreach (var s in _sizes) maxW = Math.Max(maxW, s);
         if (maxW > 1024) { message = "GPU refused: layer wider than 1024"; _deviceNote = "CPU"; return false; }
-        if (_sizes.Length > 64) { message = "GPU refused: too many layers"; _deviceNote = "CPU"; return false; }
+        // No layer-count cap: the kernels loop over layers dynamically, so any
+        // depth the CPU can hold also runs on the GPU.
         GpuContext? ctx = null;
         try
         {

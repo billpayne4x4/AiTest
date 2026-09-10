@@ -1,0 +1,23 @@
+## .NET
+bin/
+obj/
+out/
+*.user
+*.suo
+.vs/
+.idea/
+*.userprefs
+
+## Build
+[Dd]ebug/
+[Rr]elease/
+publish/
+
+## NuGet
+*.nupkg
+*.snupkg
+packages/
+
+## OS
+.DS_Store
+Thumbs.db

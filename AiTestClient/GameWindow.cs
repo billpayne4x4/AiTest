@@ -23,6 +23,8 @@ public class GameWindow : IDisposable
     public bool KeyEsc, KeyEnter, KeySpace;
     public bool Key1, Key2, Key3;
     public bool KeyA, KeyB, KeyC, KeyDelete, KeyDown, KeyD, KeyE, KeyF, KeyG, KeyH, KeyK, KeyLeft, KeyLeftBracket, KeyM, KeyN, KeyP, KeyR, KeyRight, KeyRightBracket, KeyS, KeyT, KeyUp, KeyV, KeyW;
+    /// <summary>Held-state shift for SHIFT+arrow ×10 menu jumps (held, not latched).</summary>
+    public bool KeyShift;
     private readonly HashSet<int> _pressed = new();
 
     /// <summary>True once per physical key press (auto-repeat excluded).</summary>
@@ -248,6 +250,8 @@ public class GameWindow : IDisposable
             case Sdl.K_V: KeyV = down; break;
             case Sdl.K_W: KeyW = down; break;
             case Sdl.K_LEFTBRACKET: KeyLeftBracket = down; break;
+            case Sdl.K_LSHIFT: KeyShift = down; break;
+            case Sdl.K_RSHIFT: KeyShift = down; break;
             case Sdl.K_RIGHTBRACKET: KeyRightBracket = down; break;
             case Sdl.K_RIGHT: KeyRight = down; break;
             case Sdl.K_LEFT: KeyLeft = down; break;

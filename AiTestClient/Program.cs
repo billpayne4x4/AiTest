@@ -151,6 +151,7 @@ internal static class Program
                     int delta = 0;
                     if (window.ConsumePress(Sdl.K_LEFT)) { delta = -1; }
                     if (window.ConsumePress(Sdl.K_RIGHT)) { delta = 1; }
+                    if (window.KeyShift) delta *= 10; // SHIFT+arrow jumps 10x
                     if (delta != 0)
                     {
                         switch (aiMenuRow)
@@ -184,6 +185,7 @@ internal static class Program
                     float delta = 0;
                     if (window.ConsumePress(Sdl.K_LEFT)) { delta = -1; }
                     if (window.ConsumePress(Sdl.K_RIGHT)) { delta = 1; }
+                    if (window.KeyShift) delta *= 10; // SHIFT+arrow jumps 10x
                     if (delta != 0)
                     {
                         var p = sim.PhysicsCfg;
@@ -208,6 +210,7 @@ internal static class Program
                     float delta = 0;
                     if (window.ConsumePress(Sdl.K_LEFT)) { delta = -1; }
                     if (window.ConsumePress(Sdl.K_RIGHT)) { delta = 1; }
+                    if (window.KeyShift) delta *= 10; // SHIFT+arrow jumps 10x
                     if (delta != 0)
                     {
                         var r = sim.RewardCfg;

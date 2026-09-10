@@ -75,6 +75,8 @@ public static class Sdl
     public const int K_LEFT = 1073741904;
     public const int K_DOWN = 1073741905;
     public const int K_UP = 1073741906;
+    public const int K_LSHIFT = 1073742049;
+    public const int K_RSHIFT = 1073742053;
 
     /// <summary>
     /// Blittable mirror of SDL_Event (56 bytes). Explicit layout with absolute

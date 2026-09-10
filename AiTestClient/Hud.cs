@@ -266,7 +266,7 @@ public class Hud
                 sel ? 1f : 0.75f, sel ? 0.8f : 0.75f, 0.35f);
         }
         DrawText(x + 24, y + 62 + rows.Length * 30 + 8, "UP/DOWN SELECT  LEFT/RIGHT CHANGE", 1, 0.7f, 0.8f, 0.9f);
-        DrawText(x + 24, y + 62 + rows.Length * 30 + 26, "ENTER DONE  ESC CANCEL", 1, 0.7f, 0.8f, 0.9f);
+        DrawText(x + 24, y + 62 + rows.Length * 30 + 26, "SHIFT+ARROWS X10  ENTER DONE  ESC CANCEL", 1, 0.7f, 0.8f, 0.9f);
     }
 
     private void DrawPhysicsMenu(int w, int h, int selectedRow, PhysicsConfig p)
@@ -333,7 +333,7 @@ public class Hud
                 sel ? 1f : 0.75f, sel ? 0.8f : 0.75f, 0.35f);
         }
         DrawText(x + 24, y + mh - 48, "UP/DOWN SELECT  LEFT/RIGHT CHANGE", 1, 0.7f, 0.8f, 0.9f);
-        DrawText(x + 24, y + mh - 30, "ENTER APPLY AND RETRAIN  ESC CANCEL", 1, 0.7f, 0.8f, 0.9f);
+        DrawText(x + 24, y + mh - 30, "SHIFT+ARROWS X10  ENTER APPLY  ESC CANCEL", 1, 0.7f, 0.8f, 0.9f);
     }
 
     private void DrawBrain(int w, int h, Simulation sim, bool fullscreen)

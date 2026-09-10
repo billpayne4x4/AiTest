@@ -26,7 +26,14 @@ internal static class Program
         {
             int steps = 6000;
             if (args.Length > 1 && int.TryParse(args[1], out var s)) steps = s;
-            RunHeadless(steps, Array.Exists(args, arg => arg == "--kill-offtrack"));
+            RunHeadless(steps, Array.Exists(args, arg => arg == "--kill-offtrack"),
+                Array.Exists(args, arg => arg == "--gpu"));
+            return;
+        }
+        // GPU parity self-test: same-seed CPU vs GPU math comparison, no window.
+        if (Array.Exists(args, arg => arg == "--selftest-gpu"))
+        {
+            GpuSelfTest.Run();
             return;
         }
 
@@ -56,6 +63,16 @@ internal static class Program
             bool brainFullscreen = false;
             bool showStatus = true;
             bool orbitPaused = false;
+            // steps/sec rolling meter + compute-device line for the HUD
+            long spsSteps = 0;
+            long spsTick = Stopwatch.GetTimestamp();
+            double stepsPerSec = 0;
+
+            if (args.Length > 0 && Array.Exists(args, arg => arg == "--gpu"))
+            {
+                if (sim.Brain.Net.TryEnableGpu(out string gpuMsg)) Console.WriteLine("Compute: " + gpuMsg);
+                else Console.WriteLine("Compute: " + gpuMsg + " (staying on CPU)");
+            }
 
             var last = Stopwatch.GetTimestamp();
 
@@ -84,6 +101,14 @@ internal static class Program
                     aiMenu = physMenu = false;
                     editor = false;
                     window.KeyW = false;
+                }
+                if (window.KeyD)
+                {
+                    // CPU <-> GPU toggle: weights move seamlessly both ways.
+                    if (sim.Brain.Net.IsGpu) { sim.Brain.Net.DisableGpu(); Console.WriteLine("Compute: CPU"); }
+                    else if (sim.Brain.Net.TryEnableGpu(out string dmsg)) Console.WriteLine("Compute: " + dmsg);
+                    else Console.WriteLine("Compute: " + dmsg);
+                    window.KeyD = false;
                 }
                 // Clickable menu buttons (bottom-left, above controls panel).
                 if (window.MousePressed && !aiMenu && !physMenu && !rewMenu)
@@ -151,7 +176,11 @@ internal static class Program
                     }
                     if (window.KeyEnter)
                     {
+                        bool wasGpu = sim.Brain.Net.IsGpu;
                         sim.ReconfigureBrain(hiddenLayers, hiddenNodes, trainCfg.Clone());
+                        // Seamless: stay on the GPU across brain swaps when active.
+                        if (wasGpu && !sim.Brain.Net.TryEnableGpu(out string rmsg))
+                            Console.WriteLine("Compute: " + rmsg + " (staying on CPU)");
                         window.KeyEnter = false;
                         aiMenu = false;
                     }
@@ -335,6 +364,18 @@ internal static class Program
                 }
 
                 // ---- render ----
+                // steps/sec meter: rolling window over simulation steps
+                {
+                    long nowSps = Stopwatch.GetTimestamp();
+                    double elapsed = (double)(nowSps - spsTick) / Stopwatch.Frequency;
+                    if (elapsed >= 0.5)
+                    {
+                        stepsPerSec = (sim.Steps - spsSteps) / elapsed;
+                        if (stepsPerSec < 0) stepsPerSec = 0; // counter reset (retrain)
+                        spsSteps = sim.Steps;
+                        spsTick = nowSps;
+                    }
+                }
                 renderer.UpdateCamera(sim, dt, window.MouseX, window.MouseY,
                     window.MouseDown && !editor && !aiMenu && !physMenu && !rewMenu, window.MouseWheelY, orbitPaused);
                 renderer.BeginFrame(window.Width, window.Height);
@@ -343,7 +384,8 @@ internal static class Program
                 hud.Draw(window.Width, window.Height, sim, renderer, editor, selectedPoint,
                     aiMenu, aiMenuRow, hiddenLayers, hiddenNodes, trainCfg,
                     physMenu, physRow, rewMenu, rewRow,
-                    showBrain, brainFullscreen, showStatus, orbitPaused);
+                    showBrain, brainFullscreen, showStatus, orbitPaused,
+                    sim.Brain.Net.DeviceLabel, sim.Brain.Net.GpuVramMb, stepsPerSec);
 
                 window.Swap();
             }
@@ -386,11 +428,13 @@ internal static class Program
     /// learning loop headlessly (e.g. on a machine whose GPU is busy) and for
     /// benchmarking. Prints periodic progress so you can watch the car improve.
     /// </summary>
-    private static void RunHeadless(int steps, bool killOffTrack)
+    private static void RunHeadless(int steps, bool killOffTrack, bool useGpu)
     {
         var sim = new Simulation();
         sim.NewGenerationOnOffTrack = killOffTrack;
-        Console.WriteLine($"Headless: {steps} steps, 5-ray vision, net 5-10-2");
+        if (useGpu && !sim.Brain.Net.TryEnableGpu(out string gpuMsg))
+            Console.WriteLine("Compute: " + gpuMsg + " (staying on CPU)");
+        Console.WriteLine($"Headless: {steps} steps, 5-ray vision, net 7-32-32-3, device {sim.Brain.Net.DeviceLabel}");
         Console.WriteLine("      step  lap   speed offTrack  totalReward  bestProg");
 
         for (int i = 0; i < steps; i++)

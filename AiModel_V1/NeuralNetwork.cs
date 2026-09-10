@@ -1,4 +1,5 @@
 using System;
+using AiModel_V1.Gpu;
 
 namespace AiModel_V1;
 
@@ -28,6 +29,85 @@ public class NeuralNetwork
     private readonly float[][] _vB;
     private int _adamStep;
     private Random _rng;
+
+    // ---- GPU compute (zero-dep CUDA backend; null = CPU) ----
+    // The CPU arrays are always the readable master copy: activations stream
+    // down from VRAM after every GPU forward (so the brain HUD keeps working)
+    // and weights sync both ways, making CPU -> GPU -> CPU seamless.
+    private GpuContext? _gpu;
+    private bool _gpuWeightsDirty; // VRAM holds newer weights than _weights
+    private string _deviceNote = "CPU";
+
+    /// <summary>Human-readable compute device for the status HUD.</summary>
+    public string DeviceLabel => _gpu != null ? "GPU " + _gpu.DeviceName : _deviceNote;
+    public bool IsGpu => _gpu != null;
+    /// <summary>Our VRAM footprint in MB (0 on CPU).</summary>
+    public double GpuVramMb => _gpu != null ? _gpu.VramBytes / 1000000.0 : 0.0;
+
+    /// <summary>
+    /// Move all weights to VRAM and run subsequent math on the GPU.
+    /// Safe to call anytime; fails gracefully with a reason message.
+    /// </summary>
+    public bool TryEnableGpu(out string message)
+    {
+        if (_gpu != null) { message = DeviceLabel; return true; }
+        int maxW = 0;
+        foreach (var s in _sizes) maxW = Math.Max(maxW, s);
+        if (maxW > 1024) { message = "GPU refused: layer wider than 1024"; _deviceNote = "CPU"; return false; }
+        if (_sizes.Length > 64) { message = "GPU refused: too many layers"; _deviceNote = "CPU"; return false; }
+        GpuContext? ctx = null;
+        try
+        {
+            ctx = GpuContext.Create(_sizes, Config, out _);
+            ctx.UploadWeights(_weights, _biases);
+            _gpu = ctx;
+            _gpuWeightsDirty = false;
+            message = DeviceLabel;
+            return true;
+        }
+        catch (Exception ex)
+        {
+            try { ctx?.Dispose(); } catch { }
+            message = "GPU unavailable: " + FriendlyCudaReason(ex);
+            _deviceNote = "CPU";
+            return false;
+        }
+    }
+
+    private static string FriendlyCudaReason(Exception ex)
+    {
+        if (ex is DllNotFoundException)
+            return "no CUDA driver found (needs NVIDIA GPU + driver)";
+        return ex.GetType().Name + ": " + ex.Message;
+    }
+
+    /// <summary>Move weights back to RAM and resume CPU math. Seamless.</summary>
+    public void DisableGpu()
+    {
+        if (_gpu == null) return;
+        try { EnsureWeightsSynced(); } catch { /* keep CPU copy on failure */ }
+        try { _gpu.Dispose(); } catch { }
+        _gpu = null;
+        _deviceNote = "CPU";
+    }
+
+    /// <summary>Download VRAM weights into the CPU master copy if stale.</summary>
+    private void EnsureWeightsSynced()
+    {
+        if (_gpu != null && _gpuWeightsDirty)
+        {
+            _gpu.DownloadWeights(_weights, _biases);
+            _gpuWeightsDirty = false;
+        }
+    }
+
+    /// <summary>Push the CPU master copy to VRAM (after mutate/restore/reinit).</summary>
+    private void PushWeightsToGpu()
+    {
+        if (_gpu == null) return;
+        _gpu.UploadWeights(_weights, _biases);
+        _gpuWeightsDirty = false;
+    }
 
     public NeuralNetwork(int[] sizes, int seed = 1234) : this(sizes, new TrainingConfig(), seed) { }
 
@@ -92,8 +172,8 @@ public class NeuralNetwork
 
     public float Activation(int layer, int node) => _activations[layer][node];
     public float[] LayerActivations(int layer) => (float[])_activations[layer].Clone();
-    public float Weight(int layer, int outNode, int inNode) => _weights[layer][outNode][inNode];
-    public float Bias(int layer, int outNode) => _biases[layer][outNode];
+    public float Weight(int layer, int outNode, int inNode) { EnsureWeightsSynced(); return _weights[layer][outNode][inNode]; }
+    public float Bias(int layer, int outNode) { EnsureWeightsSynced(); return _biases[layer][outNode]; }
 
     private float InitScale(int fanIn, int fanOut) => Config.Init switch
     {
@@ -137,6 +217,7 @@ public class NeuralNetwork
 
     public float[] Forward(float[] input)
     {
+        if (_gpu != null) return GpuForward(input);
         int n = Math.Min(input.Length, _sizes[0]);
         Array.Copy(input, _activations[0], n);
         for (int l = 0; l < _sizes.Length - 1; l++)
@@ -197,6 +278,45 @@ public class NeuralNetwork
         return (float[])_activations[^1].Clone();
     }
 
+    /// <summary>GPU forward: inputs up, kernels run, activations stream down.</summary>
+    private float[] GpuForward(float[] input)
+    {
+        var gpu = _gpu!;
+        if (_gpuWeightsDirty) PushWeightsToGpu();
+        int n = Math.Min(input.Length, _sizes[0]);
+        Array.Copy(input, _activations[0], n);
+        gpu.UploadInputs(input, n);
+        float temp = (float)Math.Sqrt(Math.Max(1, _sizes[^2]));
+        gpu.LaunchForward(Config, temp);
+        gpu.DownloadActs(_activations, _normed);
+        return (float[])_activations[^1].Clone();
+    }
+
+    /// <summary>Shared host-side update prep (adam step, depth scale, clip).</summary>
+    private float[] PrepareDelta(float[] outputGradient, float learningRate, out float lr, out float bc1, out float bc2)
+    {
+        _adamStep++;
+        int L = _sizes.Length - 1;
+        lr = learningRate / (float)Math.Sqrt(L);
+        const float b1 = 0.9f, b2 = 0.999f;
+        float t = _adamStep;
+        bc1 = 1f - (float)Math.Pow(b1, t);
+        bc2 = 1f - (float)Math.Pow(b2, t);
+        var d = (float[])outputGradient.Clone();
+        if (Config.GradClip > 0f)
+        {
+            float normSq = 0f;
+            for (int j = 0; j < d.Length; j++) normSq += d[j] * d[j];
+            float norm = (float)Math.Sqrt(normSq);
+            if (norm > Config.GradClip)
+            {
+                float s = Config.GradClip / norm;
+                for (int j = 0; j < d.Length; j++) d[j] *= s;
+            }
+        }
+        return d;
+    }
+
     public void PolicyGradientUpdate(float[] outputGradient, float learningRate)
     {
         int last = _sizes.Length - 1;
@@ -204,6 +324,16 @@ public class NeuralNetwork
             throw new ArgumentException("Output gradient must match the output layer size.", nameof(outputGradient));
         for (int j = 0; j < _sizes[last]; j++)
             _delta[last][j] = outputGradient[j] * ActivateDeriv(_normed[last][j], _activations[last][j], true);
+        if (_gpu != null)
+        {
+            var d = PrepareDelta(_delta[last], learningRate, out float lr, out float bc1, out float bc2);
+            var gpu = _gpu;
+            if (_gpuWeightsDirty) PushWeightsToGpu();
+            gpu.UploadDelta(d);
+            gpu.LaunchBackward(Config, lr, bc1, bc2);
+            _gpuWeightsDirty = true;
+            return;
+        }
         BackpropAndUpdate(learningRate);
     }
 
@@ -217,6 +347,16 @@ public class NeuralNetwork
             float d = _activations[last][j] - target[j];
             err += d * d;
             _delta[last][j] = -d * ActivateDeriv(_normed[last][j], _activations[last][j], true);
+        }
+        if (_gpu != null)
+        {
+            var d = PrepareDelta(_delta[last], learningRate, out float lr, out float bc1, out float bc2);
+            var gpu = _gpu;
+            if (_gpuWeightsDirty) PushWeightsToGpu();
+            gpu.UploadDelta(d);
+            gpu.LaunchBackward(Config, lr, bc1, bc2);
+            _gpuWeightsDirty = true;
+            return err / _sizes[last];
         }
         BackpropAndUpdate(learningRate);
         return err / _sizes[last];
@@ -334,12 +474,19 @@ public class NeuralNetwork
             }
             for (int j = 0; j < fanOut; j++) _biases[l][j] = 0f;
         }
+        if (_gpu != null)
+        {
+            // Fresh optimizer state on VRAM to match the fresh weights.
+            PushWeightsToGpu();
+            try { _gpu.ZeroAdam(); } catch { DisableGpu(); }
+        }
     }
 
     // ---- generational evolution: snapshot / restore / mutate ----
     /// <summary>Deep copy of all weights + biases (a "genome" for elitism).</summary>
     public (float[][][] W, float[][] B) Snapshot()
     {
+        EnsureWeightsSynced(); // champion must capture the newest weights
         int L = _sizes.Length - 1;
         var w = new float[L][][];
         var b = new float[L][];
@@ -355,17 +502,20 @@ public class NeuralNetwork
     /// <summary>Restore a snapshot (must come from an identical architecture).</summary>
     public void Restore((float[][][] W, float[][] B) snap)
     {
+        EnsureWeightsSynced(); // never clobber newer VRAM weights
         int L = _sizes.Length - 1;
         for (int l = 0; l < L; l++)
             for (int j = 0; j < _weights[l].Length; j++)
                 Array.Copy(snap.W[l][j], _weights[l][j], _weights[l][j].Length);
         for (int l = 0; l < L; l++)
             Array.Copy(snap.B[l], _biases[l], _biases[l].Length);
+        PushWeightsToGpu();
     }
 
     /// <summary>Add gaussian noise to every weight + bias (evolutionary mutation).</summary>
     public void Mutate(float scale, Random rng)
     {
+        EnsureWeightsSynced(); // never clobber newer VRAM weights
         int L = _sizes.Length - 1;
         for (int l = 0; l < L; l++)
         {
@@ -375,6 +525,7 @@ public class NeuralNetwork
             for (int j = 0; j < _biases[l].Length; j++)
                 _biases[l][j] += NextGaussian(rng) * scale;
         }
+        PushWeightsToGpu();
     }
 
     private static float NextGaussian(Random rng)

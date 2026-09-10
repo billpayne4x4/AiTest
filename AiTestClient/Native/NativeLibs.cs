@@ -5,15 +5,18 @@ using System.Runtime.InteropServices;
 namespace AiTestClient.Native;
 
 /// <summary>
-/// Cross-platform native library resolver. Maps the logical library names used
-/// in our P/Invoke declarations ("SDL2", "GL") to the real native library names
-/// on Windows, Linux, and macOS, so the client runs on any of them without
-/// hard-coded paths.
+/// Cross-platform native library resolver (Windows + Linux only).
+/// Maps the logical library names used in our P/Invoke declarations
+/// ("SDL2", "GL", "cuda") to the real native library names on each OS.
+/// macOS is not supported.
 /// </summary>
 public static class NativeLibs
 {
     public static void Install()
     {
+        if (OperatingSystem.IsMacOS())
+            throw new PlatformNotSupportedException(
+                "AiTest supports Windows and Linux only. macOS is not supported.");
         NativeLibrary.SetDllImportResolver(typeof(NativeLibs).Assembly, Resolve);
     }
 
@@ -25,16 +28,12 @@ public static class NativeLibs
             case "SDL2":
                 candidates = OperatingSystem.IsWindows()
                     ? new[] { "SDL2.dll" }
-                    : OperatingSystem.IsMacOS()
-                        ? new[] { "libSDL2-2.0.0.dylib", "libSDL2.dylib" }
-                        : new[] { "libSDL2-2.0.so.0", "libSDL2.so.0", "libSDL2.so" };
+                    : new[] { "libSDL2-2.0.so.0", "libSDL2.so.0", "libSDL2.so" };
                 break;
             case "GL":
                 candidates = OperatingSystem.IsWindows()
                     ? new[] { "opengl32.dll" }
-                    : OperatingSystem.IsMacOS()
-                        ? new[] { "libGL.dylib", "/System/Library/Frameworks/OpenGL.framework/OpenGL" }
-                        : new[] { "libGL.so.1", "libGL.so" };
+                    : new[] { "libGL.so.1", "libGL.so" };
                 break;
             default:
                 candidates = new[] { libraryName };

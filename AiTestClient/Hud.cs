@@ -145,14 +145,15 @@ public class Hud
     public void Draw(int w, int h, Simulation sim, Renderer renderer, bool editorEnabled, int selectedPoint,
         bool aiMenu, int aiMenuRow, int hiddenLayers, int hiddenNodes, AiModel_V1.TrainingConfig cfg,
         bool physMenu, int physRow, bool rewMenu, int rewRow,
-        bool showBrain, bool brainFullscreen, bool showStatus, bool orbitPaused)
+        bool showBrain, bool brainFullscreen, bool showStatus, bool orbitPaused,
+        string deviceLabel, double vramMb, double stepsPerSec)
     {
         Begin2D(w, h);
 
         // ---- stats (top-left) ----
         if (showStatus && !brainFullscreen)
         {
-            DrawPanel(10, 10, 280, 292, 0.05f, 0.08f, 0.12f, 0.75f);
+            DrawPanel(10, 10, 300, 324, 0.05f, 0.08f, 0.12f, 0.75f);
             string cam = renderer.Mode == CameraMode.Orbit ? "ORBIT" : renderer.Mode == CameraMode.Chase ? "CHASE" : "FREE";
             string mode = sim.OffTrack ? "OFF TRACK" : "DRIVING";
             DrawText(20, 18, "AI CAR - NEURAL DRIVER", 2, 0.4f, 0.9f, 1f);
@@ -183,6 +184,12 @@ public class Hud
             DrawText(20, 248, "WORST STEP: " + sim.WorstReward.ToString("F2"), 1, 1f, 0.45f, 0.45f);
             DrawText(20, 264, "CHAMPS: " + sim.ChampCount, 1, 1f, 0.85f, 0.3f);
             DrawText(20, 280, "CHAMP GEN: " + sim.ChampGen + " / " + sim.Generation, 1, 1f, 0.85f, 0.3f);
+            bool onGpu = deviceLabel.StartsWith("GPU");
+            string dev = deviceLabel.Length > 32 ? deviceLabel.Substring(0, 32) : deviceLabel;
+            DrawText(20, 296, "DEVICE: " + dev, 1, onGpu ? 0.4f : 0.8f, onGpu ? 1f : 0.8f, 0.5f);
+            string sps = "STEPS/S: " + ((long)Math.Round(stepsPerSec)).ToString("#,##0", CultureInfo.InvariantCulture);
+            if (onGpu) sps += "  VRAM " + vramMb.ToString("F1") + "MB";
+            DrawText(20, 312, sps, 1, 0.8f, 0.8f, 0.8f);
         }
 
         // ---- controls (bottom-left) ----
@@ -196,8 +203,8 @@ public class Hud
         DrawText(20, h - 84, "K NEW GENERATION OFF TRACK", 1, 0.7f, 0.7f, 0.7f);
         DrawText(20, h - 70, "SPACE  STEP (IN STEP MODE)", 1, 0.7f, 0.7f, 0.7f);
         DrawText(20, h - 56, "R RETRAIN  G RANDOM TRACK  T TRACK  M/C AI MENU", 1, 0.7f, 0.7f, 0.7f);
-        DrawText(20, h - 42, "E PHYSICS  W REWARDS  B BRAIN  V FULL  H STATUS", 1, 0.7f, 0.7f, 0.7f);
-        DrawText(20, h - 28, "ESC  QUIT", 1, 0.7f, 0.7f, 0.7f);
+        DrawText(20, h - 42, "E PHYSICS  W REWARDS  D CPU/GPU  B BRAIN  V FULL", 1, 0.7f, 0.7f, 0.7f);
+        DrawText(20, h - 28, "H STATUS  ESC QUIT", 1, 0.7f, 0.7f, 0.7f);
         // Clickable buttons that open the menus (see *ButtonHit).
         DrawPanel(10, h - 186, 150, 24, 0.1f, 0.3f, 0.45f, 0.9f);
         DrawText(24, h - 180, "[AI SETUP] (M)", 1, 1f, 1f, 1f);

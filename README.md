@@ -30,7 +30,8 @@ A from-scratch self-driving car experiment in **C# / .NET 10**: a deep feed-forw
 - ⚡ **Speed modes** — Normal / Step-through (`SPACE`) / SuperFast training
 - 🖥️ **Live HUD** — 5×7 bitmap font (now with comma glyph + thousand separators), stats readout (steps, laps, on-track %, best/worst, avg/step, champs), gas/brake display, brain visualization with 2px activity-boosted weight lines (live signal paths glow)
 - ⚙️ **AI Setup menu** — layers, nodes, residual, LayerNorm, activation, Adam, init scheme, grad clip, PPO (`M`/`C` or click **[AI SETUP]**, `↑/↓` select, `←/→` change, `Enter` apply + retrain)
-- 💻 **Headless mode** — `dotnet run -- --headless [steps]` trains with no window/GPU
+- ⚡ **Zero-dependency GPU backend (Option A)** — the brain can train on NVIDIA GPUs with **no NuGet packages**: raw CUDA driver P/Invoke (`libcuda.so.1` / `nvcuda.dll`) + hand-written embedded PTX kernels that mirror the C# math to ~1e-7 (verified by `--selftest-gpu` parity test). Press `D` to move weights to VRAM and back anytime — seamless, lossless, activations keep streaming to the brain HUD. Status shows `DEVICE` + VRAM MB and live `STEPS/S` so you can race CPU vs GPU yourself (spoiler: on a tiny 2×32 net the CPU wins — PCIe latency dwarfs the math; the GPU path pays off once batched updates land)
+- 💻 **Headless mode** — `dotnet run -- --headless [steps]` trains with no window/GPU (add `--gpu` for headless GPU training, `--selftest-gpu` for the parity test)
 
 ## 🚀 Getting Started
 
@@ -41,7 +42,7 @@ dotnet run --project AiTestClient
 dotnet run --project AiTestClient -- --headless 6000
 ```
 
-Requires .NET 10 SDK + SDL2 native libs.
+Requires .NET 10 SDK + SDL2 native libs. Windows and Linux only — macOS is not supported (no CUDA driver exists for Mac, and the native loader refuses it at startup). GPU training needs an NVIDIA GPU + driver; without one the `D` toggle reports `GPU UNAVAILABLE` and everything stays on CPU.
 
 ## 🎹 Controls
 
@@ -56,6 +57,7 @@ Requires .NET 10 SDK + SDL2 native libs.
 | `E` | Physics tuning menu (or click [PHYSICS]) |
 | `W` | Reward shaping menu (or click [REWARDS]) |
 | `T` | Track editor |
+| `D` | Toggle CPU/GPU compute for the brain |
 | `B` | Toggle brain overlay |
 | `V` | Fullscreen brain |
 | `H` | Toggle status panel |
@@ -65,6 +67,6 @@ Requires .NET 10 SDK + SDL2 native libs.
 
 ## 📁 Project Structure
 
-- `AiModel_V1/` — 🧠 `NeuralNetwork.cs`, `CarBrain.cs`, `VisionRays.cs`, `TrainingConfig.cs` (world-agnostic AI)
+- `AiModel_V1/` — 🧠 `NeuralNetwork.cs`, `CarBrain.cs`, `VisionRays.cs`, `TrainingConfig.cs`, `Gpu/` (`CudaDriver.cs`, `PtxKernels.cs`, `GpuContext.cs`) (world-agnostic AI)
 - `AiTestClient/` — 🎮 `Program.cs` (game loop), `Renderer.cs`, `Hud.cs`, `GameWindow.cs`, `World/` (`Car.cs`, `Track.cs`, `Simulation.cs`, `PhysicsConfig.cs`, `RewardConfig.cs`), `Native/` (SDL/OpenGL bindings)
 - `Images/` — 📸 screenshots

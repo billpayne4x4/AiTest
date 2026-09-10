@@ -168,6 +168,14 @@ public class NeuralNetwork
             }
             else Array.Copy(_pre[l + 1], _normed[l + 1], fanOut);
 
+            if (isOutput)
+            {
+                // Temperature scaling: keep the outputs in tanh's linear
+                // range so large fan-in can't pin the pedals at an extreme.
+                float temp = (float)Math.Sqrt(Math.Max(1, _sizes[l]));
+                for (int j = 0; j < fanOut; j++) _normed[l + 1][j] /= temp;
+            }
+
             for (int j = 0; j < fanOut; j++)
                 _activations[l + 1][j] = Activate(_normed[l + 1][j], isOutput);
 
@@ -280,9 +288,13 @@ public class NeuralNetwork
     private float ApplyUpdate(int l, int j, int i, float grad, float lr, bool isWeight)
     {
         // Tiny weight decay pulls weights back toward zero so they can't
-        // drift to saturation over many generations at depth.
+        // drift to saturation over many generations at depth. Biases get a
+        // stronger pull: with no decay they drift until the outputs pin at
+        // -1 (car presses neither pedal no matter what the inputs say).
         const float decay = 1e-4f;
+        const float biasDecay = 1e-3f;
         if (isWeight) grad += decay * _weights[l][j][i];
+        else grad += biasDecay * _biases[l][j];
         if (!Config.UseAdam) return lr * grad;
         const float b1 = 0.9f, b2 = 0.999f, eps = 1e-8f;
         float t = _adamStep;
@@ -301,7 +313,6 @@ public class NeuralNetwork
     }
 
     public void Reinitialize(int seed) => Reinitialize(seed, Config);
-
     public void Reinitialize(int seed, TrainingConfig config)
     {
         Config = config;
@@ -323,5 +334,53 @@ public class NeuralNetwork
             }
             for (int j = 0; j < fanOut; j++) _biases[l][j] = 0f;
         }
+    }
+
+    // ---- generational evolution: snapshot / restore / mutate ----
+    /// <summary>Deep copy of all weights + biases (a "genome" for elitism).</summary>
+    public (float[][][] W, float[][] B) Snapshot()
+    {
+        int L = _sizes.Length - 1;
+        var w = new float[L][][];
+        var b = new float[L][];
+        for (int l = 0; l < L; l++)
+        {
+            w[l] = new float[_weights[l].Length][];
+            for (int j = 0; j < w[l].Length; j++) w[l][j] = (float[])_weights[l][j].Clone();
+            b[l] = (float[])_biases[l].Clone();
+        }
+        return (w, b);
+    }
+
+    /// <summary>Restore a snapshot (must come from an identical architecture).</summary>
+    public void Restore((float[][][] W, float[][] B) snap)
+    {
+        int L = _sizes.Length - 1;
+        for (int l = 0; l < L; l++)
+            for (int j = 0; j < _weights[l].Length; j++)
+                Array.Copy(snap.W[l][j], _weights[l][j], _weights[l][j].Length);
+        for (int l = 0; l < L; l++)
+            Array.Copy(snap.B[l], _biases[l], _biases[l].Length);
+    }
+
+    /// <summary>Add gaussian noise to every weight + bias (evolutionary mutation).</summary>
+    public void Mutate(float scale, Random rng)
+    {
+        int L = _sizes.Length - 1;
+        for (int l = 0; l < L; l++)
+        {
+            for (int j = 0; j < _weights[l].Length; j++)
+                for (int i = 0; i < _weights[l][j].Length; i++)
+                    _weights[l][j][i] += NextGaussian(rng) * scale;
+            for (int j = 0; j < _biases[l].Length; j++)
+                _biases[l][j] += NextGaussian(rng) * scale;
+        }
+    }
+
+    private static float NextGaussian(Random rng)
+    {
+        double u1 = Math.Max(double.Epsilon, rng.NextDouble());
+        double u2 = rng.NextDouble();
+        return (float)(Math.Sqrt(-2.0 * Math.Log(u1)) * Math.Cos(2.0 * Math.PI * u2));
     }
 }

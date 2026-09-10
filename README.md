@@ -15,7 +15,8 @@ A from-scratch self-driving car experiment in **C# / .NET 10**: a deep feed-forw
 
 - 🧠 **From-scratch neural net** — feed-forward + backprop, no ML library (defaults to 32 layers × 16 nodes)
 - 🔬 **Depth-scaling techniques** — residual skips, LayerNorm, ReLU/GELU/tanh switch, Adam, He/Xavier/orthogonal init, gradient clipping, depth-scaled LR, weight decay, MaxNorm caps, activation clamps
-- 🚗 **PPO-style brain (`CarBrain`)** — vision rays → steer/throttle/brake, clipped advantage + running critic, entropy bonus, guided cornering targets
+- 🚗 **PPO-style brain (`CarBrain`)** — vision rays → steer/throttle/brake, clipped advantage + running critic, entropy bonus, guided cornering targets, recovery lessons + rejoin bonus when off track
+- 🧬 **Generational evolution** — death sends the car back to the start line; distance-based fitness with champion elitism (best genome kept, the rest mutate from it); `R` is an extinction event
 - 🏁 **Realistic car physics** — kinematic bicycle + friction circle: understeer (plow wide), oversteer (drift), spin-outs, brake zones, aero drag, downforce grip
 - 🔧 **Physics tuning menu** — toggle realistic/arcade, adjust grip, downforce, steering, oversteer, spin threshold, understeer (`E` or click **[PHYSICS]**)
 - 🏆 **Reward shaping menu** — tune all 10 weights: speed, centering, alignment, progress, wrong-way, slide, spin, understeer, steer effort, off-track (`W` or click **[REWARDS]**)
@@ -23,10 +24,10 @@ A from-scratch self-driving car experiment in **C# / .NET 10**: a deep feed-forw
 - 🛣️ **Spline track** — Catmull-Rom closed loop, twist-proof editor (invalid drags rejected), spatial-hash ray casting
 - 🎲 **Track randomizer** — always-drivable star-shaped loops (`G`)
 - 🛠️ **In-app track editor** — drag control points (`T` mode), add/remove sections, adjust road width
-- 🎮 **3D renderer** — lit ground, road + curbs + dashed centerline, car mesh, vision-ray debug lines (starts at 1920×1080)
+- 🎮 **3D renderer** — lit ground, road + curbs + dashed centerline, white start-line arrow, car mesh, vision-ray debug lines (starts at 1920×1080)
 - 📷 **3 camera modes** — Orbit / Chase / Free (keys `1/2/3`)
 - ⚡ **Speed modes** — Normal / Step-through (`SPACE`) / SuperFast training
-- 🖥️ **Live HUD** — 5×7 bitmap font, stats readout, gas/brake display, brain visualization (nodes light up, weights colored by sign/magnitude)
+- 🖥️ **Live HUD** — 5×7 bitmap font, stats readout (steps, laps, on-track %, best/worst, avg/step), gas/brake display, brain visualization (nodes light up, weights colored by sign/magnitude)
 - ⚙️ **AI Setup menu** — layers, nodes, residual, LayerNorm, activation, Adam, init scheme, grad clip, PPO (`M`/`C` or click **[AI SETUP]**, `↑/↓` select, `←/→` change, `Enter` apply + retrain)
 - 💻 **Headless mode** — `dotnet run -- --headless [steps]` trains with no window/GPU
 

@@ -242,14 +242,29 @@ public class Renderer
         float tail = 3.5f, tip = 5.5f, shaftWidth = 0.65f, headWidth = 2.2f;
         Gl.Disable(Gl.LIGHTING);
         Gl.Disable(Gl.DEPTH_TEST);
-        Gl.Color4f(0.1f, 1f, 0.55f, 0.95f);
+        Gl.Enable(Gl.BLEND);
+        Gl.BlendFunc(Gl.SRC_ALPHA, Gl.ONE_MINUS_SRC_ALPHA);
+        // soft glow underlay
+        Gl.Color4f(1f, 1f, 1f, 0.25f);
+        Gl.Begin(Gl.QUADS);
+        Gl.Vertex3f(x - tx * (tail + 0.9f) + rx * (shaftWidth + 0.9f), 0.15f, z - tz * (tail + 0.9f) + rz * (shaftWidth + 0.9f));
+        Gl.Vertex3f(x + tx * 1.5f + rx * (shaftWidth + 0.9f), 0.15f, z + tz * 1.5f + rz * (shaftWidth + 0.9f));
+        Gl.Vertex3f(x + tx * 1.5f - rx * (shaftWidth + 0.9f), 0.15f, z + tz * 1.5f - rz * (shaftWidth + 0.9f));
+        Gl.Vertex3f(x - tx * (tail + 0.9f) - rx * (shaftWidth + 0.9f), 0.15f, z - tz * (tail + 0.9f) - rz * (shaftWidth + 0.9f));
+        Gl.End();
+        Gl.Begin(Gl.TRIANGLES);
+        Gl.Vertex3f(x + tx * (tip + 0.9f), 0.15f, z + tz * (tip + 0.9f));
+        Gl.Vertex3f(x + tx * 1.2f + rx * (headWidth + 0.9f), 0.15f, z + tz * 1.2f + rz * (headWidth + 0.9f));
+        Gl.Vertex3f(x + tx * 1.2f - rx * (headWidth + 0.9f), 0.15f, z + tz * 1.2f - rz * (headWidth + 0.9f));
+        Gl.End();
+        // crisp white core
+        Gl.Color4f(1f, 1f, 1f, 0.98f);
         Gl.Begin(Gl.QUADS);
         Gl.Vertex3f(x - tx * tail + rx * shaftWidth, 0.18f, z - tz * tail + rz * shaftWidth);
         Gl.Vertex3f(x + tx * 1.5f + rx * shaftWidth, 0.18f, z + tz * 1.5f + rz * shaftWidth);
         Gl.Vertex3f(x + tx * 1.5f - rx * shaftWidth, 0.18f, z + tz * 1.5f - rz * shaftWidth);
         Gl.Vertex3f(x - tx * tail - rx * shaftWidth, 0.18f, z - tz * tail - rz * shaftWidth);
         Gl.End();
-        Gl.Color4f(0.2f, 0.85f, 1f, 1f);
         Gl.Begin(Gl.TRIANGLES);
         Gl.Vertex3f(x + tx * tip, 0.2f, z + tz * tip);
         Gl.Vertex3f(x + tx * 1.2f + rx * headWidth, 0.2f, z + tz * 1.2f + rz * headWidth);

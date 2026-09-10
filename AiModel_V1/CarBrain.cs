@@ -30,6 +30,7 @@ public class CarBrain
 
     private float _baseline;
     private float _value; // critic: running value estimate for PPO advantage
+    private long _learnSteps; // anneals exploration + guidance over training
     private readonly Random _rng;
     private readonly float[] _lastExploration = new float[3];
 
@@ -72,6 +73,14 @@ public class CarBrain
         return inputs;
     }
 
+    /// <summary>
+    /// Annealing factor 1 → 0.15 over ~1M steps: early training explores and
+    /// leans on the teacher; late training exploits a settled policy.
+    /// Without this the car swerves with full noise forever and never drives
+    /// a clean lap no matter how many million steps it trains.
+    /// </summary>
+    private float Anneal() => Math.Max(0.15f, 1f / (1f + _learnSteps / 200000f));
+
     /// <summary>Produce the (steer, throttle, brake) action for the given normalized inputs.</summary>
     public (float steer, float throttle, float brake) Act(float[] inputs, bool addNoise = true)
     {
@@ -79,14 +88,15 @@ public class CarBrain
         float steerOutput = outp[0];
         float throttleOutput = outp[1];
         float brakeOutput = outp[2];
+        float noise = Exploration * Anneal();
         if (addNoise)
         {
             _lastExploration[0] = NextGaussian();
             _lastExploration[1] = NextGaussian();
             _lastExploration[2] = NextGaussian();
-            steerOutput += _lastExploration[0] * Exploration;
-            throttleOutput += _lastExploration[1] * Exploration;
-            brakeOutput += _lastExploration[2] * Exploration;
+            steerOutput += _lastExploration[0] * noise;
+            throttleOutput += _lastExploration[1] * noise;
+            brakeOutput += _lastExploration[2] * noise;
         }
         else Array.Clear(_lastExploration);
 
@@ -131,13 +141,14 @@ public class CarBrain
 
     public void LearnGuided(float reward, float[] inputs, float targetSteer, float targetThrottle, float targetBrake)
     {
+        _learnSteps++;
         Learn(reward);
         Net.SupervisedUpdate(inputs, new[]
         {
             Math.Clamp(targetSteer, -1f, 1f),
             Math.Clamp(targetThrottle * 2f - 1f, -1f, 1f),
             Math.Clamp(targetBrake * 2f - 1f, -1f, 1f)
-        }, GuidanceLearningRate);
+        }, GuidanceLearningRate * Math.Max(0.3f, Anneal()));
     }
 
     public void Retrain(int seed)
@@ -145,7 +156,23 @@ public class CarBrain
         Net.Reinitialize(seed);
         _baseline = 0f;
         _value = 0f;
+        _learnSteps = 0;
     }
+
+    /// <summary>Snapshot the genome (for champion elitism).</summary>
+    public (float[][][] W, float[][] B) SnapshotGenome() => Net.Snapshot();
+
+    /// <summary>Restore a champion genome and clear short-term learning state.</summary>
+    public void RestoreGenome((float[][][] W, float[][] B) genome)
+    {
+        Net.Restore(genome);
+        _baseline = 0f;
+        _value = 0f;
+        Array.Clear(_lastExploration);
+    }
+
+    /// <summary>Mutate the genome with gaussian noise (evolutionary exploration).</summary>
+    public void MutateGenome(float scale) => Net.Mutate(scale, _rng);
 
     /// <summary>
     /// Reset the learning state (reward baseline + pending exploration noise)

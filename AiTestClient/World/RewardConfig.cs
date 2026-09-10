@@ -13,6 +13,7 @@ public class RewardConfig
     public float Understeer = 1f;   // flat penalty while plowing
     public float SteerEffort = 0.08f;
     public float OffTrack = 12f;    // flat penalty while off road
+    public float Parking = 2f;      // penalty for sitting still on track (anti brake-holding)
 
     public RewardConfig Clone() => (RewardConfig)MemberwiseClone();
 }

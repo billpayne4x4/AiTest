@@ -5,7 +5,7 @@ namespace AiModel_V1;
 /// </summary>
 public class TrainingConfig
 {
-    public bool UseResidual = true;
+    public bool UseResidual = false; // only helps at depth; off for shallow defaults
     public bool UseLayerNorm = true;
     // 0=tanh 1=relu 2=gelu
     public int Activation = 2;

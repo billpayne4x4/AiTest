@@ -1,5 +1,6 @@
 using System;
 using System.Collections.Generic;
+using System.Globalization;
 using AiTestClient.Native;
 using AiTestClient.World;
 
@@ -57,6 +58,7 @@ public class Hud
             { '9', G(0x0E,0x11,0x11,0x0F,0x01,0x02,0x0C) },
             { ' ', G(0,0,0,0,0,0,0) },
             { '.', G(0,0,0,0,0,0x0C,0x0C) },
+            { ',', G(0,0,0,0,0x0C,0x0C,0x08) },
             { ':', G(0,0x0C,0x0C,0,0x0C,0x0C,0) },
             { '-', G(0,0,0,0x1F,0,0,0) },
             { '/', G(0x01,0x02,0x04,0x04,0x08,0x10,0x10) },
@@ -150,20 +152,26 @@ public class Hud
         // ---- stats (top-left) ----
         if (showStatus && !brainFullscreen)
         {
-            DrawPanel(10, 10, 280, 178, 0.05f, 0.08f, 0.12f, 0.75f);
+            DrawPanel(10, 10, 280, 260, 0.05f, 0.08f, 0.12f, 0.75f);
             string cam = renderer.Mode == CameraMode.Orbit ? "ORBIT" : renderer.Mode == CameraMode.Chase ? "CHASE" : "FREE";
             string mode = sim.OffTrack ? "OFF TRACK" : "DRIVING";
             DrawText(20, 18, "AI CAR - NEURAL DRIVER", 2, 0.4f, 0.9f, 1f);
             DrawText(20, 40, "CAMERA: " + cam + (renderer.Mode == CameraMode.Orbit && orbitPaused ? " (PAUSED)" : ""), 1, 0.7f, 0.8f, 1f);
             DrawText(20, 56, "STATUS: " + mode, 1, sim.OffTrack ? 1f : 0.4f, sim.OffTrack ? 0.3f : 0.9f, 0.4f);
-            DrawText(20, 72, "STEPS: " + sim.Steps, 1, 0.8f, 0.8f, 0.8f);
+            DrawText(20, 72, "STEPS: " + sim.Steps.ToString("#,##0", CultureInfo.InvariantCulture), 1, 0.8f, 0.8f, 0.8f);
             DrawText(20, 88, "LAPS: " + sim.Laps + "  CURRENT: " + (sim.CurrentLapProgress * 100f).ToString("F0") + "%", 1, 0.8f, 0.8f, 0.8f);
             DrawText(20, 104, "SPEED: " + sim.Car.Speed.ToString("F1") + " / " + Car.MaxSpeed, 1, 0.8f, 0.8f, 0.8f);
             DrawText(20, 120, "REWARD: " + sim.Reward.ToString("F2"), 1, 0.8f, 0.8f, 0.8f);
-            DrawText(20, 136, "TOTAL: " + sim.TotalReward.ToString("F0"), 1, 0.8f, 0.8f, 0.8f);
+            DrawText(20, 136, "TOTAL: " + sim.TotalReward.ToString("#,##0", CultureInfo.InvariantCulture), 1, 0.8f, 0.8f, 0.8f);
             DrawText(20, 152, "GENERATION: " + sim.Generation, 1, 0.8f, 0.8f, 0.8f);
             DrawText(20, 168, "NEW GEN OFF TRACK: " + (sim.NewGenerationOnOffTrack ? "ON" : "OFF"), 1,
                 sim.NewGenerationOnOffTrack ? 0.3f : 0.8f, sim.NewGenerationOnOffTrack ? 1f : 0.8f, 0.5f);
+            float avg = sim.Steps > 0 ? sim.TotalReward / sim.Steps : 0f;
+            DrawText(20, 184, "AVG/STEP: " + avg.ToString("F3"), 1, 0.8f, 0.8f, 0.8f);
+            DrawText(20, 200, "ON TRACK: " + sim.OnTrackPct.ToString("F1") + "%", 1, 0.4f, 0.9f, 0.4f);
+            DrawText(20, 216, "WORST ON: " + sim.WorstOnTrackPct.ToString("F1") + "%", 1, 1f, 0.45f, 0.45f);
+            DrawText(20, 232, "BEST STEP: " + sim.BestReward.ToString("F2"), 1, 0.4f, 1f, 0.5f);
+            DrawText(20, 248, "WORST STEP: " + sim.WorstReward.ToString("F2"), 1, 1f, 0.45f, 0.45f);
         }
 
         // ---- controls (bottom-left) ----
@@ -260,7 +268,7 @@ public class Hud
 
     private void DrawRewardsMenu(int w, int h, int selectedRow, RewardConfig r)
     {
-        DrawMenuFrame(w, h, "REWARD SHAPING", 10, out int x, out int y);
+        DrawMenuFrame(w, h, "REWARD SHAPING", 11, out int x, out int y);
         DrawMenuRows(x, y, selectedRow, new[]
         {
             "SPEED: " + r.Speed.ToString("F2"),
@@ -273,6 +281,7 @@ public class Hud
             "UNDERSTEER: " + r.Understeer.ToString("F2"),
             "STEER EFFORT: " + r.SteerEffort.ToString("F3"),
             "OFF TRACK: " + r.OffTrack.ToString("F1"),
+            "PARKING: " + r.Parking.ToString("F2"),
         });
     }
 

@@ -43,11 +43,18 @@ public class Simulation
     public int Laps { get; private set; }
     public float BestLapProgress { get; private set; }
     public float TotalReward { get; private set; }
+    public long OnTrackSteps { get; private set; }
+    public long OffTrackSteps { get; private set; }
+    public float BestReward { get; private set; }
+    public float WorstReward { get; private set; }
+    public float OnTrackPct => Steps > 0 ? Math.Clamp(100f * OnTrackSteps / Steps, 0f, 100f) : 100f;
+    public float WorstOnTrackPct { get; private set; } = 100f;
     public float CurrentLapProgress => Math.Clamp(_lapProgress, 0f, 1f);
     public int Generation { get; private set; } = 1;
 
     private float _lastProgress;
     private float _lapProgress;
+    private float _lastLateral;
     private int _offTrackStreak;
     private const int MaxOffTrackSteps = 90; // auto-recover after ~1.5s off track
     private const int KillGraceSteps = 30; // kill-mode: ~0.5s of off-track learning before the soft reset
@@ -55,7 +62,7 @@ public class Simulation
     public Simulation(VisionRays? rays = null)
     {
         Track = new Track(5f);
-        Brain = new CarBrain(rays, 2024, 32, 16);
+        Brain = new CarBrain(rays ?? AiModel_V1.VisionRays.Wide7, 2024, 2, 32);
         var (sx, sz) = Track.CenterAt(0f);
         var (tx, tz) = Track.TangentAt(0f);
         Car = new Car(sx, sz, (float)Math.Atan2(tz, tx));
@@ -63,13 +70,13 @@ public class Simulation
         _lapProgress = 0f;
     }
 
-    public void ResetCar()
+    public void ResetCar(bool resetLaps = true)
     {
         var (sx, sz) = Track.CenterAt(0f);
         var (tx, tz) = Track.TangentAt(0f);
         Car.Reset(sx, sz, (float)Math.Atan2(tz, tx));
         _lastProgress = Track.ProgressAt(sx, sz);
-        Laps = 0;
+        if (resetLaps) Laps = 0;
         _offTrackStreak = 0;
         OffTrack = false;
     }
@@ -78,34 +85,56 @@ public class Simulation
     {
         Generation++;
         Brain.Retrain(Environment.TickCount);
+        _champion = null; // extinction event: forget the bloodline
+        _championFitness = float.NegativeInfinity;
         TotalReward = 0f;
         Steps = 0;
         Laps = 0;
+        OnTrackSteps = OffTrackSteps = 0;
+        BestReward = WorstReward = 0f;
+        WorstOnTrackPct = 100f;
+        _genStartDist = 0f;
         ResetCar();
     }
 
+    // Champion bloodline for true generational evolution.
+    private (float[][][] W, float[][] B)? _champion;
+    private float _championFitness = float.NegativeInfinity;
+    private float _genStartDist;
+    private const float MutationScale = 0.05f;
+
     /// <summary>
-    /// Restart after driving off track with kill mode on: the car is placed
-    /// back on the centerline <i>where it went off</i> (not back at the start),
-    /// stopped, with the reward baseline reset — but the brain keeps its
-    /// weights and all stats (steps, reward, laps) keep accumulating, so lap
-    /// flow and learning continue across the restart. By the time this runs,
-    /// the brain has already absorbed <see cref="KillGraceSteps"/> off-track
-    /// steps of -12 penalty + guided correction, so the mistake was learned
-    /// from instead of being wiped by <see cref="CarBrain.Retrain"/>.
-    /// (Teleporting to the start instead would force a full re-lap per mistake
-    /// and reset the lap counter, which is why kill mode used to look stuck.)
+    /// A real generation: score the distance covered since the last restart,
+    /// keep the genome if it's the best ever (elitism), otherwise roll back
+    /// to the champion with a small mutation — then back to the start line.
     /// </summary>
-    private void RestartAfterOffTrack()
+    private void NewGeneration()
     {
+        float fitness = (Laps + _lapProgress) - _genStartDist;
+        if (!_champion.HasValue || fitness > _championFitness)
+        {
+            _champion = Brain.SnapshotGenome();
+            _championFitness = fitness;
+        }
+        else
+        {
+            Brain.RestoreGenome(_champion.Value);
+            Brain.MutateGenome(MutationScale);
+        }
         Generation++;
         Brain.ResetLearningState();
-        var (cx, cz, heading) = Track.SnapToCenterline(Car.X, Car.Z);
-        Car.Reset(cx, cz, heading);
-        _lastProgress = Track.ProgressAt(cx, cz);
+        ResetCar(resetLaps: false); // back to the starting line, laps keep counting
+        _genStartDist = Laps + _lapProgress;
         _offTrackStreak = 0;
         OffTrack = false;
     }
+
+    /// <summary>
+    /// Restart after driving off track with kill mode on. Now a true
+    /// generation (see <see cref="NewGeneration"/>): the bloodline keeps its
+    /// best genome and the car goes back to the starting line.
+    /// </summary>
+    private void RestartAfterOffTrack() => NewGeneration();
 
     public void ReconfigureBrain(int hiddenLayerCount, int hiddenNodeCount)
         => ReconfigureBrain(hiddenLayerCount, hiddenNodeCount, Brain.TrainConfig.Clone());
@@ -113,11 +142,17 @@ public class Simulation
     public void ReconfigureBrain(int hiddenLayerCount, int hiddenNodeCount, AiModel_V1.TrainingConfig config)
     {
         Brain = new CarBrain(Brain.Rays, Environment.TickCount, hiddenLayerCount, hiddenNodeCount, config);
+        _champion = null; // new body, new bloodline
+        _championFitness = float.NegativeInfinity;
+        _genStartDist = 0f;
         Inputs = Array.Empty<float>();
         RayDistances = Array.Empty<float>();
         NodeActivations = Array.Empty<float>();
-        Steer = Throttle = Reward = TotalReward = 0f;
+        Steer = Throttle = Brake = Reward = TotalReward = 0f;
         Steps = 0;
+        OnTrackSteps = OffTrackSteps = 0;
+        BestReward = WorstReward = 0f;
+        WorstOnTrackPct = 100f;
         BestLapProgress = 0f;
         ResetCar();
     }
@@ -148,7 +183,6 @@ public class Simulation
         OffTrack = !Track.IsOnTrack(Car.X, Car.Z);
         float lateral = Track.LateralOffset(Car.X, Car.Z);
         float centering = 1f - Math.Clamp(lateral / Track.HalfWidth, 0f, 1f);
-
         float progress = Track.ProgressAt(Car.X, Car.Z);
         float dProg = progress - _lastProgress;
         if (dProg > 0.5f) dProg -= 1f;
@@ -182,9 +216,24 @@ public class Simulation
                      - (Car.Spinning ? rc.Spin : 0f)
                      - (Car.Understeering ? rc.Understeer : 0f)
                      - rc.SteerEffort * Math.Abs(Steer)
-                     - (OffTrack ? rc.OffTrack : 0f);
+                     - (OffTrack ? rc.OffTrack : 0f)
+                     // Parking ticket: sitting still on track must score worse
+                     // than trying and failing, or the brain learns that
+                     // holding the brake forever is the safest policy.
+                     - (!OffTrack && speed01 < 0.08f ? rc.Parking : 0f)
+                     - (Brake > 0.5f && speed01 < 0.15f ? rc.Parking * 0.5f : 0f)
+                     // Rejoin bonus: off track, reward closing the distance
+                     // back to the road so the brain learns recovery instead
+                     // of sightseeing in the grass.
+                     + (OffTrack ? Math.Clamp((_lastLateral - lateral) * 2f, -1f, 1f) : 0f);
+        _lastLateral = lateral;
         Reward = reward;
         TotalReward += reward;
+        if (OffTrack) OffTrackSteps++; else OnTrackSteps++;
+        float pct = OnTrackPct;
+        if (pct < WorstOnTrackPct) WorstOnTrackPct = pct;
+        if (Steps == 0) { BestReward = WorstReward = reward; }
+        else { if (reward > BestReward) BestReward = reward; if (reward < WorstReward) WorstReward = reward; }
 
         // 5) learn
         float corner = Math.Clamp(Math.Abs(headingError), 0f, 1f);
@@ -193,6 +242,17 @@ public class Simulation
         // wrong way at speed.
         float targetThrottle = 0.95f - 0.55f * corner;
         float targetBrake = (corner > 0.45f && speed01 > 0.5f) ? 1f : 0f;
+        if (OffTrack)
+        {
+            // Recovery lesson: steer back toward the nearest road point at
+            // moderate speed instead of charging deeper into the grass.
+            var (rcx, rcz, _) = Track.SnapToCenterline(Car.X, Car.Z);
+            float homeAngle = (float)Math.Atan2(rcz - Car.Z, rcx - Car.X) - Car.Heading;
+            homeAngle = (float)Math.Atan2(Math.Sin(homeAngle), Math.Cos(homeAngle));
+            targetSteer = Math.Clamp(homeAngle * 2f, -1f, 1f);
+            targetThrottle = 0.35f;
+            targetBrake = speed01 > 0.4f ? 0.5f : 0f;
+        }
         Brain.LearnGuided(reward, Inputs, targetSteer, targetThrottle, targetBrake);
 
         // capture node activations for the UI (flattened, layer-major)
@@ -221,16 +281,13 @@ public class Simulation
             return;
         }
 
-        // 6) auto-recover if stuck off track
+        // 6) death after the grace period = next generation at the start line
         if (OffTrack)
         {
             _offTrackStreak++;
             if (_offTrackStreak > MaxOffTrackSteps)
             {
-                var (cx, cz, heading) = Track.SnapToCenterline(Car.X, Car.Z);
-                Car.Reset(cx, cz, heading);
-                _lastProgress = Track.ProgressAt(cx, cz);
-                _offTrackStreak = 0;
+                NewGeneration();
             }
         }
         else

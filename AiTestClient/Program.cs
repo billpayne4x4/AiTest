@@ -49,8 +49,8 @@ internal static class Program
             int physRow = 0, rewRow = 0;
             int aiMenuRow = 0;
             const int AiMenuRows = 9;
-            int hiddenLayers = 32;
-            int hiddenNodes = 16;
+            int hiddenLayers = 2;
+            int hiddenNodes = 32;
             var trainCfg = new AiModel_V1.TrainingConfig();
             bool showBrain = true;
             bool brainFullscreen = false;
@@ -182,7 +182,7 @@ internal static class Program
                 }
                 if (rewMenu)
                 {
-                    const int RewRows = 10;
+                    const int RewRows = 11;
                     if (window.KeyUp) { rewRow = (rewRow + RewRows - 1) % RewRows; window.KeyUp = false; }
                     if (window.KeyDown) { rewRow = (rewRow + 1) % RewRows; window.KeyDown = false; }
                     float delta = 0;
@@ -203,6 +203,7 @@ internal static class Program
                             case 7: r.Understeer = Math.Max(0f, r.Understeer + delta * 0.5f); break;
                             case 8: r.SteerEffort = Math.Max(0f, r.SteerEffort + delta * 0.02f); break;
                             case 9: r.OffTrack = Math.Max(0f, r.OffTrack + delta * 2f); break;
+                            case 10: r.Parking = Math.Max(0f, r.Parking + delta * 0.5f); break;
                         }
                     }
                     if (window.KeyEnter) { rewMenu = false; window.KeyEnter = false; }

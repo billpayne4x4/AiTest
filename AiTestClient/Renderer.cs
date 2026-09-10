@@ -239,38 +239,36 @@ public class Renderer
         var (x, z) = track.CenterAt(0f);
         var (tx, tz) = track.TangentAt(0f);
         float rx = -tz, rz = tx;
-        float tail = 3.5f, tip = 5.5f, shaftWidth = 0.65f, headWidth = 2.2f;
+        float tail = 2.1f, tip = 3.3f, shaftWidth = 0.24f, headWidth = 1.0f;
+        float headBase = 0.9f; // where the head meets the shaft
         Gl.Disable(Gl.LIGHTING);
         Gl.Disable(Gl.DEPTH_TEST);
         Gl.Enable(Gl.BLEND);
         Gl.BlendFunc(Gl.SRC_ALPHA, Gl.ONE_MINUS_SRC_ALPHA);
         // soft glow underlay
-        Gl.Color4f(1f, 1f, 1f, 0.25f);
-        Gl.Begin(Gl.QUADS);
-        Gl.Vertex3f(x - tx * (tail + 0.9f) + rx * (shaftWidth + 0.9f), 0.15f, z - tz * (tail + 0.9f) + rz * (shaftWidth + 0.9f));
-        Gl.Vertex3f(x + tx * 1.5f + rx * (shaftWidth + 0.9f), 0.15f, z + tz * 1.5f + rz * (shaftWidth + 0.9f));
-        Gl.Vertex3f(x + tx * 1.5f - rx * (shaftWidth + 0.9f), 0.15f, z + tz * 1.5f - rz * (shaftWidth + 0.9f));
-        Gl.Vertex3f(x - tx * (tail + 0.9f) - rx * (shaftWidth + 0.9f), 0.15f, z - tz * (tail + 0.9f) - rz * (shaftWidth + 0.9f));
-        Gl.End();
-        Gl.Begin(Gl.TRIANGLES);
-        Gl.Vertex3f(x + tx * (tip + 0.9f), 0.15f, z + tz * (tip + 0.9f));
-        Gl.Vertex3f(x + tx * 1.2f + rx * (headWidth + 0.9f), 0.15f, z + tz * 1.2f + rz * (headWidth + 0.9f));
-        Gl.Vertex3f(x + tx * 1.2f - rx * (headWidth + 0.9f), 0.15f, z + tz * 1.2f - rz * (headWidth + 0.9f));
-        Gl.End();
-        // crisp white core
-        Gl.Color4f(1f, 1f, 1f, 0.98f);
-        Gl.Begin(Gl.QUADS);
-        Gl.Vertex3f(x - tx * tail + rx * shaftWidth, 0.18f, z - tz * tail + rz * shaftWidth);
-        Gl.Vertex3f(x + tx * 1.5f + rx * shaftWidth, 0.18f, z + tz * 1.5f + rz * shaftWidth);
-        Gl.Vertex3f(x + tx * 1.5f - rx * shaftWidth, 0.18f, z + tz * 1.5f - rz * shaftWidth);
-        Gl.Vertex3f(x - tx * tail - rx * shaftWidth, 0.18f, z - tz * tail - rz * shaftWidth);
-        Gl.End();
-        Gl.Begin(Gl.TRIANGLES);
-        Gl.Vertex3f(x + tx * tip, 0.2f, z + tz * tip);
-        Gl.Vertex3f(x + tx * 1.2f + rx * headWidth, 0.2f, z + tz * 1.2f + rz * headWidth);
-        Gl.Vertex3f(x + tx * 1.2f - rx * headWidth, 0.2f, z + tz * 1.2f - rz * headWidth);
-        Gl.End();
+        Gl.Color4f(1f, 1f, 1f, 0.08f);
+        DrawArrowShape(x, z, tx, tz, rx, rz, tail + 0.55f, tip + 0.55f, headBase,
+            shaftWidth + 0.55f, headWidth + 0.55f, 0.13f);
+        // translucent white core
+        Gl.Color4f(1f, 1f, 1f, 0.35f);
+        DrawArrowShape(x, z, tx, tz, rx, rz, tail, tip, headBase, shaftWidth, headWidth, 0.18f);
         Gl.Enable(Gl.DEPTH_TEST);
+    }
+
+    private static void DrawArrowShape(float x, float z, float tx, float tz, float rx, float rz,
+        float tail, float tip, float headBase, float shaftWidth, float headWidth, float y)
+    {
+        Gl.Begin(Gl.QUADS);
+        Gl.Vertex3f(x - tx * tail + rx * shaftWidth, y, z - tz * tail + rz * shaftWidth);
+        Gl.Vertex3f(x + tx * headBase + rx * shaftWidth, y, z + tz * headBase + rz * shaftWidth);
+        Gl.Vertex3f(x + tx * headBase - rx * shaftWidth, y, z + tz * headBase - rz * shaftWidth);
+        Gl.Vertex3f(x - tx * tail - rx * shaftWidth, y, z - tz * tail - rz * shaftWidth);
+        Gl.End();
+        Gl.Begin(Gl.TRIANGLES);
+        Gl.Vertex3f(x + tx * tip, y + 0.02f, z + tz * tip);
+        Gl.Vertex3f(x + tx * headBase + rx * headWidth, y + 0.02f, z + tz * headBase + rz * headWidth);
+        Gl.Vertex3f(x + tx * headBase - rx * headWidth, y + 0.02f, z + tz * headBase - rz * headWidth);
+        Gl.End();
     }
 
     public void RenderEditorOverlay(Track track, int selectedPoint)

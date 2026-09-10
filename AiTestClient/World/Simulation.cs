@@ -62,7 +62,7 @@ public class Simulation
     public Simulation(VisionRays? rays = null)
     {
         Track = new Track(5f);
-        Brain = new CarBrain(rays ?? AiModel_V1.VisionRays.Wide7, 2024, 2, 32);
+        Brain = new CarBrain(rays ?? AiModel_V1.VisionRays.Default5, 2024, 2, 32);
         var (sx, sz) = Track.CenterAt(0f);
         var (tx, tz) = Track.TangentAt(0f);
         Car = new Car(sx, sz, (float)Math.Atan2(tz, tx));
@@ -87,6 +87,10 @@ public class Simulation
         Brain.Retrain(Environment.TickCount);
         _champion = null; // extinction event: forget the bloodline
         _championFitness = float.NegativeInfinity;
+        BestGenDist = WorstGenDist = 0f;
+        _hasGenDist = false;
+        ChampCount = 0;
+        ChampGen = 0;
         TotalReward = 0f;
         Steps = 0;
         Laps = 0;
@@ -94,6 +98,7 @@ public class Simulation
         BestReward = WorstReward = 0f;
         WorstOnTrackPct = 100f;
         _genStartDist = 0f;
+        _lapProgress = 0f;
         ResetCar();
     }
 
@@ -102,6 +107,14 @@ public class Simulation
     private float _championFitness = float.NegativeInfinity;
     private float _genStartDist;
     private const float MutationScale = 0.05f;
+    /// <summary>Best/worst distance covered in a single generation, in laps (can exceed 1).</summary>
+    public float BestGenDist { get; private set; } = 0f;
+    public float WorstGenDist { get; private set; } = 0f;
+    private bool _hasGenDist;
+    /// <summary>How many times a new champion has been crowned.</summary>
+    public int ChampCount { get; private set; }
+    /// <summary>Generation number that produced the current champion.</summary>
+    public int ChampGen { get; private set; }
 
     /// <summary>
     /// A real generation: score the distance covered since the last restart,
@@ -111,17 +124,22 @@ public class Simulation
     private void NewGeneration()
     {
         float fitness = (Laps + _lapProgress) - _genStartDist;
+        if (!_hasGenDist || fitness > BestGenDist) BestGenDist = fitness;
+        if (!_hasGenDist || fitness < WorstGenDist) WorstGenDist = fitness;
+        _hasGenDist = true;
+        Generation++;
         if (!_champion.HasValue || fitness > _championFitness)
         {
             _champion = Brain.SnapshotGenome();
             _championFitness = fitness;
+            ChampCount++;
+            ChampGen = Generation;
         }
         else
         {
             Brain.RestoreGenome(_champion.Value);
             Brain.MutateGenome(MutationScale);
         }
-        Generation++;
         Brain.ResetLearningState();
         ResetCar(resetLaps: false); // back to the starting line, laps keep counting
         _genStartDist = Laps + _lapProgress;
@@ -144,6 +162,10 @@ public class Simulation
         Brain = new CarBrain(Brain.Rays, Environment.TickCount, hiddenLayerCount, hiddenNodeCount, config);
         _champion = null; // new body, new bloodline
         _championFitness = float.NegativeInfinity;
+        BestGenDist = WorstGenDist = 0f;
+        _hasGenDist = false;
+        ChampCount = 0;
+        ChampGen = 0;
         _genStartDist = 0f;
         Inputs = Array.Empty<float>();
         RayDistances = Array.Empty<float>();
@@ -154,6 +176,7 @@ public class Simulation
         BestReward = WorstReward = 0f;
         WorstOnTrackPct = 100f;
         BestLapProgress = 0f;
+        _lapProgress = 0f;
         ResetCar();
     }
 
@@ -199,6 +222,11 @@ public class Simulation
         }
         _lastProgress = progress;
         if (progress > BestLapProgress) BestLapProgress = progress;
+        // Live record: the current generation can raise BEST DIST mid-run,
+        // so it climbs past 100%/200%/300% in real time instead of only
+        // updating when the generation dies.
+        float liveDist = (Laps + _lapProgress) - _genStartDist;
+        if (liveDist > BestGenDist) BestGenDist = liveDist;
 
         var (trackTx, trackTz) = Track.TangentAt(progress);
         var (carFx, carFz) = Car.ForwardDir();

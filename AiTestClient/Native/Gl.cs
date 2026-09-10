@@ -52,9 +52,9 @@ public static class Gl
     // depth
     public const uint LEQUAL = 0x0203;
 
-    // blend
-    public const uint SRC_ALPHA = 0x0300;
-    public const uint ONE = 0x0301;
+    // blend (correct GL enum values: SRC_ALPHA=0x0302, ONE=1)
+    public const uint SRC_ALPHA = 0x0302;
+    public const uint ONE = 1;
     public const uint ONE_MINUS_SRC_ALPHA = 0x0303;
 
     // attrib

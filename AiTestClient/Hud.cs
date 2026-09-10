@@ -152,7 +152,7 @@ public class Hud
         // ---- stats (top-left) ----
         if (showStatus && !brainFullscreen)
         {
-            DrawPanel(10, 10, 280, 260, 0.05f, 0.08f, 0.12f, 0.75f);
+            DrawPanel(10, 10, 280, 292, 0.05f, 0.08f, 0.12f, 0.75f);
             string cam = renderer.Mode == CameraMode.Orbit ? "ORBIT" : renderer.Mode == CameraMode.Chase ? "CHASE" : "FREE";
             string mode = sim.OffTrack ? "OFF TRACK" : "DRIVING";
             DrawText(20, 18, "AI CAR - NEURAL DRIVER", 2, 0.4f, 0.9f, 1f);
@@ -168,10 +168,21 @@ public class Hud
                 sim.NewGenerationOnOffTrack ? 0.3f : 0.8f, sim.NewGenerationOnOffTrack ? 1f : 0.8f, 0.5f);
             float avg = sim.Steps > 0 ? sim.TotalReward / sim.Steps : 0f;
             DrawText(20, 184, "AVG/STEP: " + avg.ToString("F3"), 1, 0.8f, 0.8f, 0.8f);
-            DrawText(20, 200, "ON TRACK: " + sim.OnTrackPct.ToString("F1") + "%", 1, 0.4f, 0.9f, 0.4f);
-            DrawText(20, 216, "WORST ON: " + sim.WorstOnTrackPct.ToString("F1") + "%", 1, 1f, 0.45f, 0.45f);
+            if (sim.NewGenerationOnOffTrack)
+            {
+                // K mode: generational distance records (%, multi-lap capable).
+                DrawText(20, 200, "BEST DIST: " + (sim.BestGenDist * 100f).ToString("F1") + "%", 1, 0.4f, 1f, 0.5f);
+                DrawText(20, 216, "WORST DIST: " + (sim.WorstGenDist * 100f).ToString("F1") + "%", 1, 1f, 0.45f, 0.45f);
+            }
+            else
+            {
+                DrawText(20, 200, "ON TRACK: " + sim.OnTrackPct.ToString("F1") + "%", 1, 0.4f, 0.9f, 0.4f);
+                DrawText(20, 216, "WORST ON: " + sim.WorstOnTrackPct.ToString("F1") + "%", 1, 1f, 0.45f, 0.45f);
+            }
             DrawText(20, 232, "BEST STEP: " + sim.BestReward.ToString("F2"), 1, 0.4f, 1f, 0.5f);
             DrawText(20, 248, "WORST STEP: " + sim.WorstReward.ToString("F2"), 1, 1f, 0.45f, 0.45f);
+            DrawText(20, 264, "CHAMPS: " + sim.ChampCount, 1, 1f, 0.85f, 0.3f);
+            DrawText(20, 280, "CHAMP GEN: " + sim.ChampGen + " / " + sim.Generation, 1, 1f, 0.85f, 0.3f);
         }
 
         // ---- controls (bottom-left) ----
@@ -352,28 +363,35 @@ public class Hud
             }
         }
 
-        // weight lines
+        // weight lines (2px, brighter base, boosted along active pathways)
         long connectionCount = 0;
         for (int l = 0; l < L - 1; l++) connectionCount += (long)sizes[l] * sizes[l + 1];
         float lineScale = Math.Clamp(1800f / Math.Max(1800f, connectionCount), 0.02f, 1f);
+        bool hasActs = sim.NodeActivations.Length > 0;
+        Gl.LineWidth(2f);
         Gl.Begin(Gl.LINES);
         for (int l = 0; l < L - 1; l++)
         {
             for (int j = 0; j < sizes[l + 1]; j++)
             {
+                float actTo = hasActs ? Math.Abs(GetActivation(sim, l + 1, j)) : 0f;
                 for (int i = 0; i < sizes[l]; i++)
                 {
                     float wgt = net.Weight(l, j, i);
                     float mag = Math.Clamp(Math.Abs(wgt) / 2f, 0f, 1f);
-                    float alpha = (0.025f + mag * 0.45f) * lineScale;
-                    if (wgt >= 0) Gl.Color4f(0.2f, 0.9f, 1f, alpha);
-                    else Gl.Color4f(1f, 0.3f, 0.4f, alpha);
+                    float actFrom = hasActs ? Math.Abs(GetActivation(sim, l, i)) : 0f;
+                    float energy = Math.Max(actFrom, actTo); // 0..~1 along live paths
+                    float alpha = (0.07f + mag * 0.55f) * (0.45f + 0.55f * energy) * lineScale;
+                    float boost = 0.55f + 0.45f * energy;
+                    if (wgt >= 0) Gl.Color4f(0.2f * boost, 0.9f * boost, 1f, alpha);
+                    else Gl.Color4f(1f, 0.3f * boost, 0.4f * boost, alpha);
                     Gl.Vertex3f(layerX[l], layerYs[l][i], 0);
                     Gl.Vertex3f(layerX[l + 1], layerYs[l + 1][j], 0);
                 }
             }
         }
         Gl.End();
+        Gl.LineWidth(1f);
 
         // nodes
         for (int l = 0; l < L; l++)

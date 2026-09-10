@@ -156,8 +156,8 @@ internal static class Program
                     {
                         switch (aiMenuRow)
                         {
-                            case 0: hiddenLayers = delta > 0 ? checked(hiddenLayers + 1) : Math.Max(1, hiddenLayers - 1); break;
-                            case 1: hiddenNodes = delta > 0 ? checked(hiddenNodes + 1) : Math.Max(1, hiddenNodes - 1); break;
+                            case 0: hiddenLayers = delta > 0 ? checked(hiddenLayers + delta) : Math.Max(1, hiddenLayers + delta); break;
+                            case 1: hiddenNodes = delta > 0 ? checked(hiddenNodes + delta) : Math.Max(1, hiddenNodes + delta); break;
                             case 2: trainCfg.UseResidual = !trainCfg.UseResidual; break;
                             case 3: trainCfg.UseLayerNorm = !trainCfg.UseLayerNorm; break;
                             case 4: trainCfg.Activation = (trainCfg.Activation + delta + 3) % 3; break;

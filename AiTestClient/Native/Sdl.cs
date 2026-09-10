@@ -95,11 +95,13 @@ public static class Sdl
         [FieldOffset(16)] public int windowData1;
         [FieldOffset(20)] public int windowData2;
         [FieldOffset(20)] public int keySym;
+        [FieldOffset(13)] public byte keyRepeat;
         [FieldOffset(20)] public int mouseX;
         [FieldOffset(24)] public int mouseY;
     }
 
     public static int KeySym(this SdlEvent e) => e.keySym;
+    public static bool KeyRepeat(this SdlEvent e) => e.keyRepeat != 0;
     public static int MouseX(this SdlEvent e) => e.mouseX;
     public static int MouseY(this SdlEvent e) => e.mouseY;
     public static int WheelY(this SdlEvent e) => e.mouseX;

@@ -1,4 +1,5 @@
 using System;
+using System.Collections.Generic;
 using AiTestClient.Native;
 
 namespace AiTestClient;
@@ -14,10 +15,22 @@ public class GameWindow : IDisposable
     public int Width { get; private set; }
     public int Height { get; private set; }
 
-    // keyboard
+    // keyboard: held state + sticky press latches.
+    // Held bools track physical state, but at 2 steps/sec a whole tap can
+    // land between frames (down+up = lost press). So every non-repeat keydown
+    // also drops its sym into _pressed, which the game loop consumes exactly
+    // once via ConsumePress — taps survive arbitrarily slow frames.
     public bool KeyEsc, KeyEnter, KeySpace;
     public bool Key1, Key2, Key3;
     public bool KeyA, KeyB, KeyC, KeyDelete, KeyDown, KeyD, KeyE, KeyF, KeyG, KeyH, KeyK, KeyLeft, KeyLeftBracket, KeyM, KeyN, KeyP, KeyR, KeyRight, KeyRightBracket, KeyS, KeyT, KeyUp, KeyV, KeyW;
+    private readonly HashSet<int> _pressed = new();
+
+    /// <summary>True once per physical key press (auto-repeat excluded).</summary>
+    public bool ConsumePress(int sym)
+    {
+        if (_pressed.Contains(sym)) { _pressed.Remove(sym); return true; }
+        return false;
+    }
 
     // mouse
     public int MouseX, MouseY;
@@ -153,8 +166,9 @@ public class GameWindow : IDisposable
 
     public void ProcessEvents()
     {
-        MousePressed = false;
-        MouseWheelY = 0;
+        // NOTE: MousePressed/MouseWheelY are edge flags cleared by EndFrame()
+        // (after render), not here — ProcessEvents may run several times per
+        // frame (slow SuperFast steps), and clearing here would eat clicks.
         Sdl.SdlPumpEvents();
         while (Sdl.SdlPollEvent(out var e) == 1)
         {
@@ -165,6 +179,7 @@ public class GameWindow : IDisposable
                     break;
                 case Sdl.EV_KEYDOWN:
                     HandleKey(e.KeySym(), true);
+                    if (!e.KeyRepeat()) _pressed.Add(e.KeySym());
                     break;
                 case Sdl.EV_KEYUP:
                     HandleKey(e.KeySym(), false);
@@ -242,6 +257,13 @@ public class GameWindow : IDisposable
     }
 
     public void Swap() => Sdl.SdlGlSwapWindow(Handle);
+
+    /// <summary>Call once per frame after render/consume: clears edge flags.</summary>
+    public void EndFrame()
+    {
+        MousePressed = false;
+        MouseWheelY = 0;
+    }
 
     public void Dispose()
     {

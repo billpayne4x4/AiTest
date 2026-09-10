@@ -1,5 +1,6 @@
 ﻿using System;
 using System.Diagnostics;
+using AiTestClient.Native;
 using AiTestClient.World;
 
 namespace AiTestClient;
@@ -82,35 +83,30 @@ internal static class Program
             {
                 window.ProcessEvents();
 
-                if (window.KeyM || window.KeyC)
+                if (window.ConsumePress(Sdl.K_M) || window.ConsumePress(Sdl.K_C))
                 {
                     aiMenu = !aiMenu;
                     physMenu = rewMenu = false;
                     editor = false;
-                    window.KeyM = false;
-                    window.KeyC = false;
                 }
-                if (window.KeyE)
+                if (window.ConsumePress(Sdl.K_E))
                 {
                     physMenu = !physMenu;
                     aiMenu = rewMenu = false;
                     editor = false;
-                    window.KeyE = false;
                 }
-                if (window.KeyW)
+                if (window.ConsumePress(Sdl.K_W))
                 {
                     rewMenu = !rewMenu;
                     aiMenu = physMenu = false;
                     editor = false;
-                    window.KeyW = false;
                 }
-                if (window.KeyD)
+                if (window.ConsumePress(Sdl.K_D))
                 {
                     // CPU <-> GPU toggle: weights move seamlessly both ways.
                     if (sim.Brain.Net.IsGpu) { sim.Brain.Net.DisableGpu(); Console.WriteLine("Compute: CPU"); }
                     else if (sim.Brain.Net.TryEnableGpu(out string dmsg)) Console.WriteLine("Compute: " + dmsg);
                     else Console.WriteLine("Compute: " + dmsg);
-                    window.KeyD = false;
                 }
                 // Clickable menu buttons (bottom-left, above controls panel).
                 if (window.MousePressed && !aiMenu && !physMenu && !rewMenu)
@@ -119,48 +115,42 @@ internal static class Program
                     else if (Hud.PhysButtonHit(window.Width, window.Height, window.MouseX, window.MouseY)) { physMenu = true; editor = false; }
                     else if (Hud.RewButtonHit(window.Width, window.Height, window.MouseX, window.MouseY)) { rewMenu = true; editor = false; }
                 }
-                if (window.KeyB)
+                if (window.ConsumePress(Sdl.K_B))
                 {
                     showBrain = !showBrain;
                     if (!showBrain) brainFullscreen = false;
-                    window.KeyB = false;
                 }
-                if (window.KeyV)
+                if (window.ConsumePress(Sdl.K_V))
                 {
                     brainFullscreen = !brainFullscreen;
                     showBrain = true;
-                    window.KeyV = false;
                 }
-                if (window.KeyH)
+                if (window.ConsumePress(Sdl.K_H))
                 {
                     showStatus = !showStatus;
-                    window.KeyH = false;
                 }
-                if (window.KeyP)
+                if (window.ConsumePress(Sdl.K_P))
                 {
                     orbitPaused = !orbitPaused;
-                    window.KeyP = false;
                 }
-                if (window.KeyK)
+                if (window.ConsumePress(Sdl.K_K))
                 {
                     sim.NewGenerationOnOffTrack = !sim.NewGenerationOnOffTrack;
-                    window.KeyK = false;
                 }
-                if (window.KeyEsc)
+                if (window.ConsumePress(Sdl.K_ESCAPE))
                 {
                     if (aiMenu) aiMenu = false;
                     else if (physMenu) physMenu = false;
                     else if (rewMenu) rewMenu = false;
                     else window.Quit = true;
-                    window.KeyEsc = false;
                 }
                 if (aiMenu)
                 {
-                    if (window.KeyUp) { aiMenuRow = (aiMenuRow + AiMenuRows - 1) % AiMenuRows; window.KeyUp = false; }
-                    if (window.KeyDown) { aiMenuRow = (aiMenuRow + 1) % AiMenuRows; window.KeyDown = false; }
+                    if (window.ConsumePress(Sdl.K_UP)) { aiMenuRow = (aiMenuRow + AiMenuRows - 1) % AiMenuRows; }
+                    if (window.ConsumePress(Sdl.K_DOWN)) { aiMenuRow = (aiMenuRow + 1) % AiMenuRows; }
                     int delta = 0;
-                    if (window.KeyLeft) { delta = -1; window.KeyLeft = false; }
-                    if (window.KeyRight) { delta = 1; window.KeyRight = false; }
+                    if (window.ConsumePress(Sdl.K_LEFT)) { delta = -1; }
+                    if (window.ConsumePress(Sdl.K_RIGHT)) { delta = 1; }
                     if (delta != 0)
                     {
                         switch (aiMenuRow)
@@ -176,25 +166,24 @@ internal static class Program
                             case 8: trainCfg.UsePpo = !trainCfg.UsePpo; break;
                         }
                     }
-                    if (window.KeyEnter)
+                    if (window.ConsumePress(Sdl.K_ENTER))
                     {
                         bool wasGpu = sim.Brain.Net.IsGpu;
                         sim.ReconfigureBrain(hiddenLayers, hiddenNodes, trainCfg.Clone());
                         // Seamless: stay on the GPU across brain swaps when active.
                         if (wasGpu && !sim.Brain.Net.TryEnableGpu(out string rmsg))
                             Console.WriteLine("Compute: " + rmsg + " (staying on CPU)");
-                        window.KeyEnter = false;
                         aiMenu = false;
                     }
                 }
                 if (physMenu)
                 {
                     const int PhysRows = 7;
-                    if (window.KeyUp) { physRow = (physRow + PhysRows - 1) % PhysRows; window.KeyUp = false; }
-                    if (window.KeyDown) { physRow = (physRow + 1) % PhysRows; window.KeyDown = false; }
+                    if (window.ConsumePress(Sdl.K_UP)) { physRow = (physRow + PhysRows - 1) % PhysRows; }
+                    if (window.ConsumePress(Sdl.K_DOWN)) { physRow = (physRow + 1) % PhysRows; }
                     float delta = 0;
-                    if (window.KeyLeft) { delta = -1; window.KeyLeft = false; }
-                    if (window.KeyRight) { delta = 1; window.KeyRight = false; }
+                    if (window.ConsumePress(Sdl.K_LEFT)) { delta = -1; }
+                    if (window.ConsumePress(Sdl.K_RIGHT)) { delta = 1; }
                     if (delta != 0)
                     {
                         var p = sim.PhysicsCfg;
@@ -209,16 +198,16 @@ internal static class Program
                             case 6: p.Understeer = !p.Understeer; break;
                         }
                     }
-                    if (window.KeyEnter) { physMenu = false; window.KeyEnter = false; }
+                    if (window.ConsumePress(Sdl.K_ENTER)) { physMenu = false; }
                 }
                 if (rewMenu)
                 {
                     const int RewRows = 11;
-                    if (window.KeyUp) { rewRow = (rewRow + RewRows - 1) % RewRows; window.KeyUp = false; }
-                    if (window.KeyDown) { rewRow = (rewRow + 1) % RewRows; window.KeyDown = false; }
+                    if (window.ConsumePress(Sdl.K_UP)) { rewRow = (rewRow + RewRows - 1) % RewRows; }
+                    if (window.ConsumePress(Sdl.K_DOWN)) { rewRow = (rewRow + 1) % RewRows; }
                     float delta = 0;
-                    if (window.KeyLeft) { delta = -1; window.KeyLeft = false; }
-                    if (window.KeyRight) { delta = 1; window.KeyRight = false; }
+                    if (window.ConsumePress(Sdl.K_LEFT)) { delta = -1; }
+                    if (window.ConsumePress(Sdl.K_RIGHT)) { delta = 1; }
                     if (delta != 0)
                     {
                         var r = sim.RewardCfg;
@@ -237,60 +226,54 @@ internal static class Program
                             case 10: r.Parking = Math.Max(0f, r.Parking + delta * 0.5f); break;
                         }
                     }
-                    if (window.KeyEnter) { rewMenu = false; window.KeyEnter = false; }
+                    if (window.ConsumePress(Sdl.K_ENTER)) { rewMenu = false; }
                 }
 
-                // ---- input: mode switching (edge-triggered) ----
-                if (window.Key1) { renderer.Mode = CameraMode.Orbit; window.Key1 = false; }
-                if (window.Key2) { renderer.Mode = CameraMode.Chase; window.Key2 = false; }
-                if (window.Key3) { renderer.Mode = CameraMode.Free; window.Key3 = false; }
-                if (window.KeyN) { speed = Speed.Normal; window.KeyN = false; }
-                if (window.KeyF) { speed = Speed.Step; window.KeyF = false; }
-                if (window.KeyS) { speed = Speed.SuperFast; window.KeyS = false; }
-                if (window.KeyR) { sim.RetrainBrain(); window.KeyR = false; }
-                if (window.KeyG)
+                // ---- input: mode switching (sticky presses: survive slow frames) ----
+                if (window.ConsumePress(Sdl.K_1)) { renderer.Mode = CameraMode.Orbit; }
+                if (window.ConsumePress(Sdl.K_2)) { renderer.Mode = CameraMode.Chase; }
+                if (window.ConsumePress(Sdl.K_3)) { renderer.Mode = CameraMode.Free; }
+                if (window.ConsumePress(Sdl.K_N)) { speed = Speed.Normal; }
+                if (window.ConsumePress(Sdl.K_F)) { speed = Speed.Step; }
+                if (window.ConsumePress(Sdl.K_S)) { speed = Speed.SuperFast; }
+                if (window.ConsumePress(Sdl.K_R)) { sim.RetrainBrain(); }
+                if (window.ConsumePress(Sdl.K_G))
                 {
                     sim.Track.Randomize(Environment.TickCount);
                     sim.ResetCar();
-                    window.KeyG = false;
                 }
-                if (window.KeyT)
+                if (window.ConsumePress(Sdl.K_T))
                 {
                     editor = !editor;
                     draggingPoint = -1;
                     selectedPoint = editor && sim.Track.ControlPoints.Count > 0 ? 0 : -1;
-                    window.KeyT = false;
                 }
 
                 // ---- track editor: drag control points ----
                 if (editor)
                 {
-                    if (window.KeyA && selectedPoint >= 0)
+                    if (window.ConsumePress(Sdl.K_A) && selectedPoint >= 0)
                     {
                         selectedPoint = sim.Track.InsertSectionAfter(selectedPoint);
                         sim.ResetCar();
-                        window.KeyA = false;
                     }
-                    if (window.KeyDelete)
+                    if (window.ConsumePress(Sdl.K_DELETE))
                     {
                         if (sim.Track.RemoveSection(selectedPoint))
                         {
                             selectedPoint = Math.Min(selectedPoint, sim.Track.ControlPoints.Count - 1);
                             sim.ResetCar();
                         }
-                        window.KeyDelete = false;
                     }
-                    if (window.KeyLeftBracket)
+                    if (window.ConsumePress(Sdl.K_LEFTBRACKET))
                     {
                         sim.Track.AdjustWidth(-0.5f);
                         sim.ResetCar();
-                        window.KeyLeftBracket = false;
                     }
-                    if (window.KeyRightBracket)
+                    if (window.ConsumePress(Sdl.K_RIGHTBRACKET))
                     {
                         sim.Track.AdjustWidth(0.5f);
                         sim.ResetCar();
-                        window.KeyRightBracket = false;
                     }
 
                     if (window.MousePressed && draggingPoint < 0)
@@ -350,10 +333,9 @@ internal static class Program
                         if (!editor && !aiMenu && !physMenu && !rewMenu && PaceNormalStep()) sim.Step();
                         break;
                     case Speed.Step:
-                        if (!aiMenu && !physMenu && !rewMenu && window.KeySpace)
+                        if (!aiMenu && !physMenu && !rewMenu && window.ConsumePress(Sdl.K_SPACE))
                         {
                             sim.Step();
-                            window.KeySpace = false;
                         }
                         // Keep the pacer resynced so switching back to Normal
                         // doesn't burst through catch-up steps.
@@ -364,6 +346,9 @@ internal static class Program
                         // frame, so STEPS/S reflects real compute throughput
                         // and the CPU/GPU (D) toggle shows a visible difference.
                         // (A fixed steps/frame count would just mirror fps.)
+                        // Events are pumped every step: with huge nets a step
+                        // can take ~500ms, and keys pressed mid-burst must not
+                        // wait for (or get lost before) the next frame.
                         if (!aiMenu && !physMenu && !rewMenu)
                         {
                             long t0 = Stopwatch.GetTimestamp();
@@ -373,6 +358,8 @@ internal static class Program
                             {
                                 sim.Step();
                                 n++;
+                                window.ProcessEvents();
+                                if (window.Quit) break;
                             }
                         }
                         PaceReset();
@@ -404,6 +391,7 @@ internal static class Program
                     sim.Brain.Net.DeviceLabel, sim.Brain.Net.GpuVramMb, stepsPerSec);
 
                 window.Swap();
+                window.EndFrame();
             }
         }
         catch (Exception ex)

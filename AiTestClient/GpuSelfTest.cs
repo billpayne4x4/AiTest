@@ -64,6 +64,24 @@ public static class GpuSelfTest
         Console.WriteLine($"Single supervised-update weight diff: {supDiff:E3}");
         gpu1.DisableGpu();
 
+        // Adam-vs-SGD bisection: two updates on fresh nets, both modes.
+        foreach (bool adam in new[] { true, false })
+        {
+            var cfgg = new TrainingConfig { UseAdam = adam };
+            var ca = new NeuralNetwork(sizes, cfgg, 2024);
+            var ga = new NeuralNetwork(sizes, cfgg, 2024);
+            ga.TryEnableGpu(out _);
+            ca.Forward(fixedIn); ga.Forward(fixedIn);
+            Console.WriteLine($"  two-update (adam={adam}) fwd diff: {MaxWeightDiff(ca, ga, sizes):E3} (expect ~0)");
+            ca.PolicyGradientUpdate(fixedGrad, 0.008f);
+            ga.PolicyGradientUpdate(fixedGrad, 0.008f);
+            Console.WriteLine($"  two-update (adam={adam}) after policy: {MaxWeightDiff(ca, ga, sizes):E3}");
+            ca.SupervisedUpdate(fixedIn, fixedTgt, 0.012f);
+            ga.SupervisedUpdate(fixedIn, fixedTgt, 0.012f);
+            Console.WriteLine($"  two-update diff (adam={adam}): {MaxWeightDiff(ca, ga, sizes):E3}");
+            ga.DisableGpu();
+        }
+
         const int iters = 300;
         var rng = new Random(7);
         var inputs = new float[iters][];

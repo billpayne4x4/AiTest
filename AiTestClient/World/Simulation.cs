@@ -47,7 +47,15 @@ public class Simulation
     public long OffTrackSteps { get; private set; }
     public float BestReward { get; private set; }
     public float WorstReward { get; private set; }
-    public float OnTrackPct => Steps > 0 ? Math.Clamp(100f * OnTrackSteps / Steps, 0f, 100f) : 100f;
+    // Rolling window: ON TRACK % covers the last WindowSteps so sustained
+    // clean driving can climb back to 100% (a lifetime average never could).
+    public const int WindowSteps = 5000;
+    private readonly bool[] _window = new bool[WindowSteps];
+    private int _windowIdx;
+    private int _windowCount;
+    private int _windowOnTrack;
+    public float OnTrackPct => _windowCount > 0
+        ? Math.Clamp(100f * _windowOnTrack / _windowCount, 0f, 100f) : 100f;
     public float WorstOnTrackPct { get; private set; } = 100f;
     public float CurrentLapProgress => Math.Clamp(_lapProgress, 0f, 1f);
     public int Generation { get; private set; } = 1;
@@ -95,6 +103,8 @@ public class Simulation
         Steps = 0;
         Laps = 0;
         OnTrackSteps = OffTrackSteps = 0;
+        Array.Clear(_window);
+        _windowIdx = _windowCount = _windowOnTrack = 0;
         BestReward = WorstReward = 0f;
         WorstOnTrackPct = 100f;
         _genStartDist = 0f;
@@ -173,6 +183,8 @@ public class Simulation
         Steer = Throttle = Brake = Reward = TotalReward = 0f;
         Steps = 0;
         OnTrackSteps = OffTrackSteps = 0;
+        Array.Clear(_window);
+        _windowIdx = _windowCount = _windowOnTrack = 0;
         BestReward = WorstReward = 0f;
         WorstOnTrackPct = 100f;
         BestLapProgress = 0f;
@@ -261,6 +273,12 @@ public class Simulation
         Reward = reward;
         TotalReward += reward;
         if (OffTrack) OffTrackSteps++; else OnTrackSteps++;
+        // roll the window: evict the oldest step, record this one
+        if (_windowCount == WindowSteps && _window[_windowIdx]) _windowOnTrack--;
+        _window[_windowIdx] = !OffTrack;
+        if (!OffTrack) _windowOnTrack++;
+        _windowIdx = (_windowIdx + 1) % WindowSteps;
+        if (_windowCount < WindowSteps) _windowCount++;
         float pct = OnTrackPct;
         if (pct < WorstOnTrackPct) WorstOnTrackPct = pct;
         if (Steps == 0) { BestReward = WorstReward = reward; }

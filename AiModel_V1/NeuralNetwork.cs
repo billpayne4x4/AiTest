@@ -283,7 +283,8 @@ public class NeuralNetwork
     private float[] GpuForward(float[] input)
     {
         var gpu = _gpu!;
-        if (_gpuWeightsDirty) PushWeightsToGpu();
+        // NOTE: never push here — VRAM is authoritative; the CPU copy may be
+        // stale (flagged dirty) and pushing it would clobber trained weights.
         int n = Math.Min(input.Length, _sizes[0]);
         Array.Copy(input, _activations[0], n);
         gpu.UploadInputs(input, n);
@@ -329,9 +330,11 @@ public class NeuralNetwork
         {
             var d = PrepareDelta(_delta[last], learningRate, out float lr, out float bc1, out float bc2);
             var gpu = _gpu;
-            if (_gpuWeightsDirty) PushWeightsToGpu();
             gpu.UploadDelta(d);
             gpu.LaunchBackward(Config, lr, bc1, bc2);
+            // VRAM is now newer than the CPU copy — flag it so CPU-side reads
+            // (viz, snapshot, toggle-off) download on demand. Do NOT push here:
+            // the CPU copy is stale and would clobber trained weights.
             _gpuWeightsDirty = true;
             return;
         }
@@ -353,9 +356,9 @@ public class NeuralNetwork
         {
             var d = PrepareDelta(_delta[last], learningRate, out float lr, out float bc1, out float bc2);
             var gpu = _gpu;
-            if (_gpuWeightsDirty) PushWeightsToGpu();
             gpu.UploadDelta(d);
             gpu.LaunchBackward(Config, lr, bc1, bc2);
+            // NOTE: see above — flag dirty for on-demand download, never push.
             _gpuWeightsDirty = true;
             return err / _sizes[last];
         }

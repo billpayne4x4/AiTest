@@ -158,11 +158,25 @@ public class Simulation
     }
 
     /// <summary>
-    /// Restart after driving off track with kill mode on. Now a true
-    /// generation (see <see cref="NewGeneration"/>): the bloodline keeps its
-    /// best genome and the car goes back to the starting line.
+    /// Restart after driving off track with kill mode on. A true generation
+    /// (see <see cref="NewGeneration"/>): the bloodline keeps its best genome
+    /// and the car goes back to the starting line. K mode only.
     /// </summary>
     private void RestartAfterOffTrack() => NewGeneration();
+
+    /// <summary>
+    /// Non-K-mode rescue: put the car back on the road where it went off,
+    /// stopped, baseline reset — no generation change, no trip to the start.
+    /// </summary>
+    private void RescueInPlace()
+    {
+        Brain.ResetLearningState();
+        var (cx, cz, heading) = Track.SnapToCenterline(Car.X, Car.Z);
+        Car.Reset(cx, cz, heading);
+        _lastProgress = Track.ProgressAt(cx, cz);
+        _offTrackStreak = 0;
+        OffTrack = false;
+    }
 
     public void ReconfigureBrain(int hiddenLayerCount, int hiddenNodeCount)
         => ReconfigureBrain(hiddenLayerCount, hiddenNodeCount, Brain.TrainConfig.Clone());
@@ -309,9 +323,9 @@ public class Simulation
 
         Steps++;
 
-        // Kill mode: give the brain a grace period of off-track steps first so
-        // each of them applies its -12 penalty + guided correction via
-        // LearnGuided above, then do a SOFT restart that keeps the weights.
+        // Kill mode (K): grace period of off-track steps banks penalty +
+        // guided correction, then a true generation at the start line.
+        // K off is handled by the auto-recover below (rescue in place).
         if (NewGenerationOnOffTrack)
         {
             if (OffTrack)
@@ -330,13 +344,15 @@ public class Simulation
             return;
         }
 
-        // 6) death after the grace period = next generation at the start line
+        // 6) death after the grace period. K mode = true generation at the
+        // start line; K mode off = rescue back where it went off, no restart.
         if (OffTrack)
         {
             _offTrackStreak++;
             if (_offTrackStreak > MaxOffTrackSteps)
             {
-                NewGeneration();
+                if (NewGenerationOnOffTrack) NewGeneration();
+                else RescueInPlace();
             }
         }
         else

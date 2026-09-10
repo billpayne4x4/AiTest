@@ -34,6 +34,9 @@ public class GameWindow : IDisposable
         return false;
     }
 
+    private static bool IsArrow(int sym)
+        => sym == Sdl.K_UP || sym == Sdl.K_DOWN || sym == Sdl.K_LEFT || sym == Sdl.K_RIGHT;
+
     // mouse
     public int MouseX, MouseY;
     public bool MouseDown;
@@ -181,7 +184,9 @@ public class GameWindow : IDisposable
                     break;
                 case Sdl.EV_KEYDOWN:
                     HandleKey(e.KeySym(), true);
-                    if (!e.KeyRepeat()) _pressed.Add(e.KeySym());
+                    // Latch press (repeat excluded so toggles don't machine-gun),
+                    // except arrows: holding them must keep menus scrolling.
+                    if (!e.KeyRepeat() || IsArrow(e.KeySym())) _pressed.Add(e.KeySym());
                     break;
                 case Sdl.EV_KEYUP:
                     HandleKey(e.KeySym(), false);

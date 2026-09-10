@@ -16,8 +16,8 @@ A from-scratch self-driving car experiment in **C# / .NET 10**: a deep feed-forw
 - 🧠 **From-scratch neural net** — feed-forward + backprop, no ML library (defaults to 2 layers × 32 nodes, 5-ray vision)
 - 🔬 **Depth-scaling techniques** — residual skips, LayerNorm, ReLU/GELU/tanh switch, Adam, He/Xavier/orthogonal init, gradient clipping, depth-scaled LR, weight + bias decay, MaxNorm caps, activation clamps, output temperature scaling
 - 🚗 **PPO-style brain (`CarBrain`)** — 5 vision rays → steer/throttle/brake, clipped advantage + running critic, entropy bonus, guided cornering targets, recovery lessons + rejoin bonus when off track, training annealing (exploration and teacher guidance fade as it learns)
-- 🧬 **Generational evolution** — death sends the car back to the start line; distance-based fitness with champion elitism (best genome kept, the rest mutate from it); `R` is an extinction event
-- 📊 **Evolution dashboard** — on-track %, worst on-track %, best/worst step reward, avg/step, champion count + champion generation; K mode swaps to best/worst generational distance records (multi-lap %, updated live)
+- 🧬 **Generational evolution** — K mode on: death is a true generation (distance fitness, champion elitism, mutated rollback) back at the start line; K mode off: quiet rescue where it went off, no restart. `R` is an extinction event
+- 📊 **Evolution dashboard** — rolling on-track % (last 5K steps, so clean driving can recover to 100%), worst on-track %, best/worst step reward, avg/step, champion count + champion generation; K mode swaps to live best/worst generational distance records (multi-lap %)
 - 🏁 **Realistic car physics** — kinematic bicycle + friction circle: understeer (plow wide), oversteer (drift), spin-outs, brake zones, aero drag, downforce grip
 - 🔧 **Physics tuning menu** — toggle realistic/arcade, adjust grip, downforce, steering, oversteer, spin threshold, understeer (`E` or click **[PHYSICS]**, `SHIFT`+`←/→` jumps ×10)
 - 🏆 **Reward shaping menu** — tune all 11 weights: speed, centering, alignment, progress, wrong-way, slide, spin, understeer, steer effort, off-track, parking anti-stall (`W` or click **[REWARDS]**, `SHIFT`+`←/→` jumps ×10)
@@ -29,7 +29,7 @@ A from-scratch self-driving car experiment in **C# / .NET 10**: a deep feed-forw
 - 📷 **3 camera modes** — Orbit / Chase / Free (keys `1/2/3`)
 - ⚡ **Speed modes** — Normal / Step-through (`SPACE`) / SuperFast training
 - 🖥️ **Live HUD** — 5×7 bitmap font (now with comma glyph + thousand separators), stats readout (steps, laps, on-track %, best/worst, avg/step, champs), gas/brake display, brain visualization with 2px activity-boosted weight lines (live signal paths glow)
-- ⚙️ **AI Setup menu** — layers, nodes, residual, LayerNorm, activation, Adam, init scheme, grad clip, PPO (`M`/`C` or click **[AI SETUP]**, `↑/↓` select, `←/→` change, `SHIFT`+`←/→` jumps ×10, `Enter` apply + retrain)
+- ⚙️ **AI Setup menu** — layers, nodes, residual, LayerNorm, activation, Adam, init scheme, grad clip, PPO (`M`/`C` or click **[AI SETUP]**, `↑/↓` select, `←/→` change, hold arrows to scroll, `SHIFT`+`←/→` jumps ×10, `Enter` apply + retrain)
 - ⚡ **Zero-dependency GPU backend (Option A)** — the brain can train on NVIDIA GPUs with **no NuGet packages**: raw CUDA driver P/Invoke (`libcuda.so.1` / `nvcuda.dll`) + hand-written embedded PTX kernels that mirror the C# math to ~1e-7 (verified by `--selftest-gpu` parity test). Press `D` to move weights to VRAM and back anytime — seamless, lossless, activations keep streaming to the brain HUD. Status shows `DEVICE` + VRAM MB and live `STEPS/S` so you can race CPU vs GPU yourself (spoiler: on a tiny 2×32 net the CPU wins — PCIe latency dwarfs the math; the GPU path pays off once batched updates land)
 - 💻 **Headless mode** — `dotnet run -- --headless [steps]` trains with no window/GPU (add `--gpu` for headless GPU training, `--selftest-gpu` for the parity test)
 
@@ -62,7 +62,7 @@ Requires .NET 10 SDK + SDL2 native libs. Windows and Linux only — macOS is not
 | `V` | Fullscreen brain |
 | `H` | Toggle status panel |
 | `P` | Pause orbit camera |
-| `K` | New generation off-track mode (HUD shows generational distance records) |
+| `K` | Kill mode: deaths become generations at the start line (HUD shows distance records); off = rescue in place |
 | `ESC` | Quit / close menu |
 
 ## 📁 Project Structure
